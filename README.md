@@ -42,7 +42,12 @@ the route geometry.
 --destination-code TEXT        Destination IATA/ICAO code, e.g. PVG
 --origin-name TEXT             Origin label and metadata name
 --destination-name TEXT        Destination label and metadata name
+--waypoint-codes A,B,C         Airport codes for an ordered multi-leg map
+--waypoint-names A,B,C         Airport names for an ordered multi-leg map
+--route-name TEXT              Override the metadata route subtitle
+--metadata-detail TEXT         Override the date/duration detail line
 --width PX --height PX         SVG canvas size (default 1600 × 1000)
+--scale N                      Scale the physical SVG size and all artwork
 --route-width PX               Route stroke width
 ```
 
@@ -52,6 +57,17 @@ All visual colors are configurable:
 --ocean-color --land-color --coastline-color --border-color
 --route-color --marker-color --text-color
 ```
+
+To create a `16000 × 10000` SVG with every visual element enlarged in the same
+10:1 proportion, keep the default design canvas and use:
+
+```bash
+python3 -m aeroroute input.csv --output output.svg --scale 10
+```
+
+The SVG keeps a `1600 × 1000` viewBox while declaring a physical size of
+`16000 × 10000`. Strokes, markers, labels, and metadata therefore scale with
+the map instead of becoming relatively thinner.
 
 For the complete command reference:
 

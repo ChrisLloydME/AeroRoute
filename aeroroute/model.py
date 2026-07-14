@@ -26,6 +26,7 @@ class TrackPoint:
 class Track:
     source: Path
     points: tuple[TrackPoint, ...]
+    waypoint_indices: tuple[int, ...] = ()
 
     @property
     def callsign(self) -> str:
@@ -38,6 +39,11 @@ class Track:
     @property
     def end(self) -> TrackPoint:
         return self.points[-1]
+
+    @property
+    def waypoints(self) -> tuple[TrackPoint, ...]:
+        indices = self.waypoint_indices or (0, len(self.points) - 1)
+        return tuple(self.points[index] for index in indices)
 
 
 def _optional_float(value: str | None, *, row_number: int, field: str) -> float | None:
@@ -120,5 +126,30 @@ def load_track(path: str | Path) -> Track:
     if len(points) < 2:
         raise TrackDataError("at least two ADS-B points are required")
     points.sort(key=lambda point: point.timestamp)
-    return Track(source=source, points=tuple(points))
+    return Track(
+        source=source,
+        points=tuple(points),
+        waypoint_indices=(0, len(points) - 1),
+    )
 
+
+def combine_tracks(
+    paths: list[str | Path] | tuple[str | Path, ...],
+    *,
+    source_name: str = "itinerary",
+) -> Track:
+    """Combine ordered flight legs without re-sorting across leg boundaries."""
+
+    if not paths:
+        raise TrackDataError("at least one ADS-B CSV file is required")
+    legs = [load_track(path) for path in paths]
+    points: list[TrackPoint] = []
+    waypoint_indices = [0]
+    for leg in legs:
+        points.extend(leg.points)
+        waypoint_indices.append(len(points) - 1)
+    return Track(
+        source=Path(source_name),
+        points=tuple(points),
+        waypoint_indices=tuple(waypoint_indices),
+    )

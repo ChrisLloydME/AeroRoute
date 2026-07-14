@@ -7,7 +7,7 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 
 from aeroroute.geometry import interpolating_bezier_path, project
-from aeroroute.model import load_track
+from aeroroute.model import combine_tracks, load_track
 from aeroroute.svg import MapStyle, RenderOptions, build_svg, write_svg
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -41,6 +41,17 @@ class TrackTests(unittest.TestCase):
         _, y_east = project(150.0, 30.0, 1600, 1000)
         self.assertEqual(x_low, x_high)
         self.assertEqual(y_west, y_east)
+
+    def test_physical_scale_enlarges_all_artwork_proportionally(self) -> None:
+        svg, _ = build_svg(self.track, options=RenderOptions(scale=10))
+        root = ET.fromstring(svg)
+        self.assertEqual(root.attrib["width"], "16000")
+        self.assertEqual(root.attrib["height"], "10000")
+        self.assertEqual(root.attrib["viewBox"], "0 0 1600 1000")
+        route = root.find(".//svg:g[@id='flight-track']", SVG_NS)
+        self.assertIsNotNone(route)
+        assert route is not None
+        self.assertNotIn("vector-effect", route.attrib)
 
     def test_svg_has_all_nodes_but_only_two_visible_point_markers(self) -> None:
         svg, stats = build_svg(
@@ -94,6 +105,28 @@ class TrackTests(unittest.TestCase):
             self.assertTrue(output.is_file())
             self.assertGreater(output.stat().st_size, 100_000)
             self.assertEqual(stats.source_points, 2697)
+
+    def test_combined_itinerary_keeps_all_leg_points_and_waypoints(self) -> None:
+        itinerary = combine_tracks(
+            [
+                ROOT / "ADS-B Data" / "SK2596_40a24106.csv",
+                ROOT / "ADS-B Data" / "LX1279_40a80dc2.csv",
+            ],
+            source_name="KEF-CPH-ZRH",
+        )
+        svg, stats = build_svg(
+            itinerary,
+            options=RenderOptions(
+                show_airports=True,
+                waypoint_codes=("KEF", "CPH", "ZRH"),
+                waypoint_names=("Keflavik", "Copenhagen", "Zurich"),
+            ),
+        )
+        root = ET.fromstring(svg)
+        self.assertEqual(stats.source_points, 645 + 431)
+        self.assertEqual(stats.curve_segments, stats.source_points - 1)
+        self.assertEqual(len(root.findall(".//svg:circle", SVG_NS)), 3)
+        self.assertIsNotNone(root.find(".//svg:circle[@id='waypoint-marker-1']", SVG_NS))
 
     def test_map_layers_and_colors_are_configurable(self) -> None:
         svg, _ = build_svg(

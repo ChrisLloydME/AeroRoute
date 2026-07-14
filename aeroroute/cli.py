@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from .model import TrackDataError, load_track
+from .model import TrackDataError, combine_tracks, load_track
 from .svg import MapStyle, RenderOptions, write_svg
 
 
@@ -19,10 +19,16 @@ def build_parser() -> argparse.ArgumentParser:
         prog="aeroroute",
         description="Generate a deterministic SVG world map from an ADS-B CSV track.",
     )
-    parser.add_argument("input", type=Path, help="ADS-B CSV file")
+    parser.add_argument("input", type=Path, nargs="+", help="ordered ADS-B CSV file(s)")
     parser.add_argument("-o", "--output", type=Path, required=True, help="output SVG")
     parser.add_argument("--width", type=int, default=1600)
     parser.add_argument("--height", type=int, default=1000)
+    parser.add_argument(
+        "--scale",
+        type=float,
+        default=1.0,
+        help="physical output multiplier; --scale 10 writes 16000 x 10000",
+    )
 
     borders = parser.add_mutually_exclusive_group()
     borders.add_argument("--borders", dest="show_borders", action="store_true")
@@ -36,6 +42,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--destination-code")
     parser.add_argument("--origin-name")
     parser.add_argument("--destination-name")
+    parser.add_argument("--waypoint-codes", help="comma-separated airport codes")
+    parser.add_argument("--waypoint-names", help="comma-separated airport names")
+    parser.add_argument("--route-name", help="metadata route subtitle")
+    parser.add_argument("--metadata-detail", help="metadata detail line override")
 
     parser.add_argument("--ocean-color", type=_color, default="#B2BAC3")
     parser.add_argument("--land-color", type=_color, default="#D9D9D9")
@@ -56,13 +66,18 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
-        track = load_track(args.input)
+        track = (
+            load_track(args.input[0])
+            if len(args.input) == 1
+            else combine_tracks(args.input, source_name=args.flight_number or "itinerary")
+        )
         stats = write_svg(
             track,
             args.output,
             options=RenderOptions(
                 width=args.width,
                 height=args.height,
+                scale=args.scale,
                 show_borders=args.show_borders,
                 show_country_labels=args.country_labels,
                 show_airports=args.show_airports,
@@ -72,6 +87,14 @@ def main(argv: list[str] | None = None) -> int:
                 destination_code=args.destination_code,
                 origin_name=args.origin_name,
                 destination_name=args.destination_name,
+                waypoint_codes=tuple(
+                    value.strip() for value in (args.waypoint_codes or "").split(",") if value.strip()
+                ),
+                waypoint_names=tuple(
+                    value.strip() for value in (args.waypoint_names or "").split(",") if value.strip()
+                ),
+                route_name=args.route_name,
+                metadata_detail=args.metadata_detail,
             ),
             style=MapStyle(
                 ocean=args.ocean_color,

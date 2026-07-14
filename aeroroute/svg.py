@@ -43,6 +43,7 @@ class MapStyle:
 class RenderOptions:
     width: int = 1600
     height: int = 1000
+    scale: float = 1.0
     show_borders: bool = True
     show_country_labels: bool = False
     show_airports: bool = False
@@ -52,6 +53,10 @@ class RenderOptions:
     destination_code: str | None = None
     origin_name: str | None = None
     destination_name: str | None = None
+    waypoint_codes: tuple[str, ...] = ()
+    waypoint_names: tuple[str, ...] = ()
+    route_name: str | None = None
+    metadata_detail: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,13 +136,17 @@ def build_svg(
     width, height = options.width, options.height
     if width < 320 or height < 200:
         raise ValueError("canvas must be at least 320 x 200")
+    if options.scale <= 0:
+        raise ValueError("scale must be greater than zero")
+    output_width = int(round(width * options.scale))
+    output_height = int(round(height * options.scale))
 
     root = ET.Element(
         _tag("svg"),
         {
             "viewBox": f"0 0 {width} {height}",
-            "width": str(width),
-            "height": str(height),
+            "width": str(output_width),
+            "height": str(output_height),
             "style": f"background-color:{style.ocean};background:{style.ocean}",
             "overflow": "hidden",
             "role": "img",
@@ -207,7 +216,6 @@ def build_svg(
                 "fill": "none",
                 "stroke": style.borders,
                 "stroke-width": str(style.border_width),
-                "vector-effect": "non-scaling-stroke",
             },
         )
     ET.SubElement(
@@ -219,7 +227,6 @@ def build_svg(
             "fill": "none",
             "stroke": style.coastline,
             "stroke-width": str(style.coastline_width),
-            "vector-effect": "non-scaling-stroke",
         },
     )
 
@@ -271,7 +278,6 @@ def build_svg(
             "stroke-width": str(style.route_width),
             "stroke-linecap": "round",
             "stroke-linejoin": "round",
-            "vector-effect": "non-scaling-stroke",
         },
     )
     # Render concrete path elements instead of SVG <use>. Some otherwise valid
@@ -292,62 +298,56 @@ def build_svg(
     start_xy = project(track.start.longitude, track.start.latitude, width, height)
     end_xy = project(track.end.longitude, track.end.latitude, width, height)
     marker_group = ET.SubElement(root, _tag("g"), {"id": "endpoint-markers"})
-    ET.SubElement(
-        marker_group,
-        _tag("circle"),
-        {
-            "id": "origin-marker",
-            "cx": f"{start_xy[0]:.6f}",
-            "cy": f"{start_xy[1]:.6f}",
-            "r": "4.5",
-            "fill": style.marker,
-            "data-latitude": f"{track.start.latitude:.6f}",
-            "data-longitude": f"{track.start.longitude:.6f}",
-        },
-    )
-    ET.SubElement(
-        marker_group,
-        _tag("circle"),
-        {
-            "id": "destination-marker",
-            "cx": f"{end_xy[0]:.6f}",
-            "cy": f"{end_xy[1]:.6f}",
-            "r": "4.5",
-            "fill": style.marker,
-            "data-latitude": f"{track.end.latitude:.6f}",
-            "data-longitude": f"{track.end.longitude:.6f}",
-        },
-    )
+    waypoints = track.waypoints
+    for waypoint_index, waypoint in enumerate(waypoints):
+        waypoint_xy = project(waypoint.longitude, waypoint.latitude, width, height)
+        if waypoint_index == 0:
+            marker_id = "origin-marker"
+        elif waypoint_index == len(waypoints) - 1:
+            marker_id = "destination-marker"
+        else:
+            marker_id = f"waypoint-marker-{waypoint_index}"
+        ET.SubElement(
+            marker_group,
+            _tag("circle"),
+            {
+                "id": marker_id,
+                "cx": f"{waypoint_xy[0]:.6f}",
+                "cy": f"{waypoint_xy[1]:.6f}",
+                "r": "4.5",
+                "fill": style.marker,
+                "data-latitude": f"{waypoint.latitude:.6f}",
+                "data-longitude": f"{waypoint.longitude:.6f}",
+            },
+        )
 
     if options.show_airports:
         label_group = ET.SubElement(root, _tag("g"), {"id": "airport-labels"})
-        origin_label = " · ".join(
-            value for value in (options.origin_code, options.origin_name) if value
-        ) or "ORIGIN"
-        destination_label = " · ".join(
-            value for value in (options.destination_code, options.destination_name) if value
-        ) or "DESTINATION"
-        _add_text(
-            label_group,
-            origin_label,
-            start_xy[0] - 12,
-            start_xy[1] + 5,
-            fill=style.text,
-            size=14,
-            family=style.font_family,
-            weight="600",
-            anchor="end",
+        codes = options.waypoint_codes or tuple(
+            value or "" for value in (options.origin_code, options.destination_code)
         )
-        _add_text(
-            label_group,
-            destination_label,
-            end_xy[0] + 13,
-            end_xy[1] + 5,
-            fill=style.text,
-            size=14,
-            family=style.font_family,
-            weight="600",
+        names = options.waypoint_names or tuple(
+            value or "" for value in (options.origin_name, options.destination_name)
         )
+        for waypoint_index, waypoint in enumerate(waypoints):
+            code = codes[waypoint_index] if waypoint_index < len(codes) else ""
+            name = names[waypoint_index] if waypoint_index < len(names) else ""
+            label = " · ".join(value for value in (code, name) if value)
+            if not label:
+                label = f"STOP {waypoint_index + 1}"
+            waypoint_xy = project(waypoint.longitude, waypoint.latitude, width, height)
+            is_first = waypoint_index == 0
+            _add_text(
+                label_group,
+                label,
+                waypoint_xy[0] - 12 if is_first else waypoint_xy[0] + 12,
+                waypoint_xy[1] + 5,
+                fill=style.text,
+                size=14,
+                family=style.font_family,
+                weight="600",
+                anchor="end" if is_first else "start",
+            )
 
     if options.show_flight_number:
         metadata = ET.SubElement(root, _tag("g"), {"id": "flight-metadata"})
@@ -355,7 +355,11 @@ def build_svg(
         baseline = height - max(44.0, height * 0.06)
         title_size = max(34.0, min(58.0, width / 28.0))
         flight_number = _flight_number(track, options)
-        if options.origin_name and options.destination_name:
+        if options.route_name:
+            route_name = options.route_name
+        elif options.waypoint_names:
+            route_name = " — ".join(name.upper() for name in options.waypoint_names)
+        elif options.origin_name and options.destination_name:
             route_name = f"{options.origin_name.upper()} — {options.destination_name.upper()}"
         else:
             route_name = track.callsign or "FLIGHT TRACK"
@@ -394,9 +398,10 @@ def build_svg(
                 "stroke-width": "2",
             },
         )
+        detail = options.metadata_detail or f"{date} · {_format_duration(track)}"
         _add_text(
             metadata,
-            f"{date} · {_format_duration(track)}",
+            detail,
             left,
             baseline + 8,
             fill=style.text,
