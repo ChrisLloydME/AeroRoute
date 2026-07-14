@@ -15,8 +15,8 @@ source point while showing no waypoint dots or straight-line joins.
 Python 3.10 or newer is sufficient; there are no runtime dependencies.
 
 ```bash
-python3 -m aeroroute "ADS-B Data/LX188_40a4c777.csv" \
-  --output output/LX188.svg \
+python3 -m aeroroute "examples/data/LX188_40a4c777.csv" \
+  --output LX188.svg \
   --show-flight-number \
   --flight-number LX188 \
   --show-airports \
@@ -25,6 +25,10 @@ python3 -m aeroroute "ADS-B Data/LX188_40a4c777.csv" \
   --origin-name Zurich \
   --destination-name "Shanghai Pudong"
 ```
+
+The repository's [`examples/data`](examples/data) directory contains sample
+Flightradar24 tracks, with matching rendered maps in
+[`examples/output`](examples/output).
 
 The command reports the input point count and generated cubic-segment count.
 For a track containing `N` points, the SVG contains `N - 1` cubic segments. It
@@ -95,6 +99,10 @@ Build a standalone app containing Python, Qt, the SVG renderer, and map data:
 chmod +x scripts/build_macos.sh
 scripts/build_macos.sh universal2
 ```
+
+Build products are written to `dist/` and intermediate files to `build/`.
+Both directories, along with `.app`, `.dmg`, `.pkg`, and `.xcarchive` bundles,
+are excluded from Git.
 
 Valid targets are `universal2`, `arm64`, and `x86_64`. The universal build runs
 natively on both Apple Silicon and Intel Macs when the selected Python and all

@@ -1,9 +1,19 @@
+# macOS metadata and distributable app bundles
 .DS_Store
+*.app/
+*.dmg
+*.pkg
+*.xcarchive/
+
+# Local Python environments and caches
 .venv/
 .venv-build/
-build/
-dist/
-.pyinstaller-cache/
-*.spec.bak
+*.egg-info/
 __pycache__/
 *.py[cod]
+
+# Packaging output (including AeroRoute.app and release archives)
+/build/
+/dist/
+.pyinstaller-cache/
+*.spec.bak

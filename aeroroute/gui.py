@@ -98,6 +98,47 @@ class ColorButton(QPushButton):
         )
 
 
+class AspectRatioSvgWidget(QWidget):
+    """Keep the SVG canvas at its design ratio inside a flexible preview area."""
+
+    def __init__(self, width: int = 1600, height: int = 1000) -> None:
+        super().__init__()
+        self._ratio = width / height
+        self._svg = QSvgWidget(self)
+
+    def load(self, data: QByteArray) -> None:
+        self._svg.load(data)
+
+    def renderer(self):  # type: ignore[no-untyped-def]
+        return self._svg.renderer()
+
+    def set_aspect_ratio(self, width: int, height: int) -> None:
+        self._ratio = width / height
+        self._layout_svg()
+
+    def resizeEvent(self, event) -> None:  # type: ignore[no-untyped-def]
+        super().resizeEvent(event)
+        self._layout_svg()
+
+    def _layout_svg(self) -> None:
+        available_width = self.width()
+        available_height = self.height()
+        if available_width <= 0 or available_height <= 0:
+            return
+        if available_width / available_height > self._ratio:
+            height = available_height
+            width = round(height * self._ratio)
+        else:
+            width = available_width
+            height = round(width / self._ratio)
+        self._svg.setGeometry(
+            (available_width - width) // 2,
+            (available_height - height) // 2,
+            width,
+            height,
+        )
+
+
 class AeroRouteWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
@@ -120,17 +161,6 @@ class AeroRouteWindow(QMainWindow):
         outer = QVBoxLayout(root)
         outer.setContentsMargins(14, 14, 14, 12)
         outer.setSpacing(10)
-
-        header = QHBoxLayout()
-        title = QLabel("AeroRoute")
-        title.setFont(QFont(".AppleSystemUIFont", 17, QFont.Weight.DemiBold))
-        subtitle = QLabel("Flightradar24 CSV to editable SVG")
-        subtitle.setObjectName("secondary")
-        header.addWidget(title)
-        header.addSpacing(10)
-        header.addWidget(subtitle)
-        header.addStretch()
-        outer.addLayout(header)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.setChildrenCollapsible(False)
@@ -174,7 +204,7 @@ class AeroRouteWindow(QMainWindow):
     def _make_leg_panel(self) -> QWidget:
         panel = QFrame()
         panel.setObjectName("panel")
-        panel.setFrameShape(QFrame.Shape.StyledPanel)
+        panel.setFrameShape(QFrame.Shape.NoFrame)
         panel.setMinimumWidth(235)
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(12, 12, 12, 12)
@@ -191,6 +221,7 @@ class AeroRouteWindow(QMainWindow):
         hint.setWordWrap(True)
         layout.addWidget(hint)
         self.flight_list = FlightList()
+        self.flight_list.setFrameShape(QFrame.Shape.NoFrame)
         layout.addWidget(self.flight_list, 1)
         controls = QHBoxLayout()
         self.remove_button = QPushButton("Remove")
@@ -204,7 +235,7 @@ class AeroRouteWindow(QMainWindow):
     def _make_preview_panel(self) -> QWidget:
         panel = QFrame()
         panel.setObjectName("panel")
-        panel.setFrameShape(QFrame.Shape.StyledPanel)
+        panel.setFrameShape(QFrame.Shape.NoFrame)
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(8, 8, 8, 8)
         self.preview_stack = QStackedWidget()
@@ -220,7 +251,7 @@ class AeroRouteWindow(QMainWindow):
         empty_layout.addWidget(empty_title)
         empty_layout.addWidget(empty_copy)
         empty_layout.addStretch()
-        self.preview = QSvgWidget()
+        self.preview = AspectRatioSvgWidget()
         self.preview.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.preview_stack.addWidget(empty)
         self.preview_stack.addWidget(self.preview)
@@ -230,7 +261,7 @@ class AeroRouteWindow(QMainWindow):
     def _make_inspector(self) -> QWidget:
         panel = QFrame()
         panel.setObjectName("panel")
-        panel.setFrameShape(QFrame.Shape.StyledPanel)
+        panel.setFrameShape(QFrame.Shape.NoFrame)
         panel.setMinimumWidth(270)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -242,9 +273,7 @@ class AeroRouteWindow(QMainWindow):
         heading = QLabel("EXPORT INSPECTOR")
         heading.setObjectName("section")
         body_layout.addWidget(heading)
-        form = QFormLayout()
-        form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
-        form.setVerticalSpacing(8)
+        form = self._left_aligned_form()
         self.flight_number = QLineEdit()
         self.flight_number.setPlaceholderText("LX188 or ITINERARY")
         self.airport_codes = QLineEdit()
@@ -275,7 +304,7 @@ class AeroRouteWindow(QMainWindow):
         output_label = QLabel("OUTPUT")
         output_label.setObjectName("section")
         body_layout.addWidget(output_label)
-        output_form = QFormLayout()
+        output_form = self._left_aligned_form()
         self.width_spin = QSpinBox()
         self.width_spin.setRange(320, 10000)
         self.width_spin.setValue(1600)
@@ -300,7 +329,7 @@ class AeroRouteWindow(QMainWindow):
         colors_label = QLabel("COLORS")
         colors_label.setObjectName("section")
         body_layout.addWidget(colors_label)
-        colors = QFormLayout()
+        colors = self._left_aligned_form()
         self.color_buttons = {
             "Ocean": ColorButton("#B2BAC3"),
             "Land": ColorButton("#D9D9D9"),
@@ -312,11 +341,21 @@ class AeroRouteWindow(QMainWindow):
             colors.addRow(name, button)
         body_layout.addLayout(colors)
         body_layout.addStretch()
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setWidget(body)
         outer = QVBoxLayout(panel)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.addWidget(scroll)
         return panel
+
+    @staticmethod
+    def _left_aligned_form() -> QFormLayout:
+        form = QFormLayout()
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
+        form.setFormAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        form.setVerticalSpacing(8)
+        return form
 
     def _connect_controls(self) -> None:
         self.add_button.clicked.connect(self.choose_files)
@@ -464,6 +503,7 @@ class AeroRouteWindow(QMainWindow):
             self.status_label.setText(str(exc))
             return
         self.preview.load(QByteArray(svg.encode("utf-8")))
+        self.preview.set_aspect_ratio(self.width_spin.value(), self.height_spin.value())
         self.preview_stack.setCurrentIndex(1)
         self.export_button.setEnabled(True)
         legs = self.flight_list.count()

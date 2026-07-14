@@ -12,7 +12,8 @@ from aeroroute.model import TrackDataError, combine_tracks, load_track, validate
 from aeroroute.svg import MapStyle, RenderOptions, build_svg, write_svg
 
 ROOT = Path(__file__).resolve().parents[1]
-LX188 = ROOT / "ADS-B Data" / "LX188_40a4c777.csv"
+EXAMPLE_DATA = ROOT / "examples" / "data"
+LX188 = EXAMPLE_DATA / "LX188_40a4c777.csv"
 SVG_NS = {"svg": "http://www.w3.org/2000/svg"}
 
 
@@ -116,8 +117,8 @@ class TrackTests(unittest.TestCase):
     def test_combined_itinerary_keeps_all_leg_points_and_waypoints(self) -> None:
         itinerary = combine_tracks(
             [
-                ROOT / "ADS-B Data" / "SK2596_40a24106.csv",
-                ROOT / "ADS-B Data" / "LX1279_40a80dc2.csv",
+                EXAMPLE_DATA / "SK2596_40a24106.csv",
+                EXAMPLE_DATA / "LX1279_40a80dc2.csv",
             ],
             source_name="KEF-CPH-ZRH",
         )
@@ -137,8 +138,8 @@ class TrackTests(unittest.TestCase):
 
     def test_ordered_itinerary_validates_end_to_start_connections(self) -> None:
         connected = [
-            load_track(ROOT / "ADS-B Data" / "SK2596_40a24106.csv"),
-            load_track(ROOT / "ADS-B Data" / "LX1279_40a80dc2.csv"),
+            load_track(EXAMPLE_DATA / "SK2596_40a24106.csv"),
+            load_track(EXAMPLE_DATA / "LX1279_40a80dc2.csv"),
         ]
         distances = validate_leg_order(connected)
         self.assertEqual(len(distances), 1)
