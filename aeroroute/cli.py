@@ -69,7 +69,11 @@ def main(argv: list[str] | None = None) -> int:
         track = (
             load_track(args.input[0])
             if len(args.input) == 1
-            else combine_tracks(args.input, source_name=args.flight_number or "itinerary")
+            else combine_tracks(
+                args.input,
+                source_name=args.flight_number or "itinerary",
+                validate_continuity=True,
+            )
         )
         stats = write_svg(
             track,

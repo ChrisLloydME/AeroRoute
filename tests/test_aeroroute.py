@@ -7,7 +7,8 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 
 from aeroroute.geometry import interpolating_bezier_path, project
-from aeroroute.model import combine_tracks, load_track
+from aeroroute.fr24 import load_fr24
+from aeroroute.model import TrackDataError, combine_tracks, load_track, validate_leg_order
 from aeroroute.svg import MapStyle, RenderOptions, build_svg, write_svg
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,6 +26,12 @@ class TrackTests(unittest.TestCase):
             csv_points = sum(1 for _ in handle) - 1
         self.assertEqual(len(self.track.points), csv_points)
         self.assertEqual(len(self.track.points), 2697)
+
+    def test_standard_fr24_adapter_extracts_download_metadata(self) -> None:
+        imported = load_fr24(LX188)
+        self.assertEqual(imported.metadata.flight_number, "LX188")
+        self.assertEqual(imported.metadata.callsign, "SWR188")
+        self.assertEqual(imported.metadata.row_count, 2697)
 
     def test_curve_uses_one_cubic_segment_per_adjacent_pair(self) -> None:
         points = [(0.0, 0.0), (1.0, 2.0), (3.0, 1.0), (4.0, 4.0)]
@@ -127,6 +134,17 @@ class TrackTests(unittest.TestCase):
         self.assertEqual(stats.curve_segments, stats.source_points - 1)
         self.assertEqual(len(root.findall(".//svg:circle", SVG_NS)), 3)
         self.assertIsNotNone(root.find(".//svg:circle[@id='waypoint-marker-1']", SVG_NS))
+
+    def test_ordered_itinerary_validates_end_to_start_connections(self) -> None:
+        connected = [
+            load_track(ROOT / "ADS-B Data" / "SK2596_40a24106.csv"),
+            load_track(ROOT / "ADS-B Data" / "LX1279_40a80dc2.csv"),
+        ]
+        distances = validate_leg_order(connected)
+        self.assertEqual(len(distances), 1)
+        self.assertLess(distances[0], 1.0)
+        with self.assertRaises(TrackDataError):
+            validate_leg_order(list(reversed(connected)))
 
     def test_map_layers_and_colors_are_configurable(self) -> None:
         svg, _ = build_svg(

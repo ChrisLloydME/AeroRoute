@@ -13,7 +13,11 @@ dependencies = []
 
 [project.scripts]
 aeroroute = "aeroroute.cli:main"
+aeroroute-app = "aeroroute.gui:main"
+
+[project.optional-dependencies]
+app = ["PySide6==6.11.1"]
+build = ["PyInstaller==6.21.0"]
 
 [tool.setuptools.package-data]
 aeroroute = ["data/*.geojson", "data/*.md"]
-

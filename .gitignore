@@ -1,4 +1,9 @@
 .DS_Store
 .venv/
+.venv-build/
+build/
+dist/
+.pyinstaller-cache/
+*.spec.bak
 __pycache__/
 *.py[cod]

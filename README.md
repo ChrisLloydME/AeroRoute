@@ -1,7 +1,8 @@
 # AeroRoute
 
 AeroRoute turns ADS-B CSV flight tracks into deterministic, editable SVG world
-maps. It uses every valid input position: no sampling, deduplication, moving
+maps. It includes a native PySide6 macOS app and a dependency-free command-line
+renderer. It uses every valid input position: no sampling, deduplication, moving
 average, or route reconstruction is applied.
 
 The route is not a polyline. After equirectangular projection, every adjacent
@@ -75,9 +76,39 @@ For the complete command reference:
 python3 -m aeroroute --help
 ```
 
-## Input format
+## macOS app
 
-The imported repository data already uses the expected columns:
+The app accepts one or more standard Flightradar24 CSV downloads. Drop files
+onto the window, drag them into itinerary order, edit the airport labels, and
+export SVG. For multiple legs, every file must begin near the endpoint of the
+previous file. AeroRoute reports the discontinuity and disables export when the
+ordered connection is greater than 50 km.
+
+The live preview uses the same parser, projection, point set, curve generator,
+and SVG renderer as the final export. Output scale defaults to 10, producing a
+`16000 × 10000` SVG from the `1600 × 1000` design canvas without making the
+route relatively thinner.
+
+Build a standalone app containing Python, Qt, the SVG renderer, and map data:
+
+```bash
+chmod +x scripts/build_macos.sh
+scripts/build_macos.sh universal2
+```
+
+Valid targets are `universal2`, `arm64`, and `x86_64`. The universal build runs
+natively on both Apple Silicon and Intel Macs when the selected Python and all
+binary wheels contain both architectures. The checked build configuration uses
+macOS 13 as its minimum version and intentionally performs no Developer ID
+signing or Apple notarization.
+
+Because the app is unsigned, macOS Gatekeeper may quarantine a copy transferred
+from another computer. This is expected for the requested unsigned build and is
+separate from whether dependencies are bundled.
+
+## Flightradar24 input
+
+The import adapter recognizes the standard Flightradar24 flight-track columns:
 
 ```csv
 Timestamp,UTC,Callsign,Position,Altitude,Speed,Direction

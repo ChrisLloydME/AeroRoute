@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import csv
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
+from math import asin, cos, radians, sin, sqrt
 from pathlib import Path
 
 
@@ -46,24 +46,6 @@ class Track:
         return tuple(self.points[index] for index in indices)
 
 
-def _optional_float(value: str | None, *, row_number: int, field: str) -> float | None:
-    if value is None or not value.strip():
-        return None
-    try:
-        return float(value)
-    except ValueError as exc:
-        raise TrackDataError(f"row {row_number}: invalid {field}: {value!r}") from exc
-
-
-def _parse_utc(value: str | None, timestamp: float, *, row_number: int) -> datetime:
-    if value and value.strip():
-        try:
-            return datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
-        except ValueError as exc:
-            raise TrackDataError(f"row {row_number}: invalid UTC: {value!r}") from exc
-    return datetime.fromtimestamp(timestamp, tz=timezone.utc)
-
-
 def load_track(path: str | Path) -> Track:
     """Load every CSV row, validate it, and return points sorted by timestamp.
 
@@ -71,78 +53,52 @@ def load_track(path: str | Path) -> Track:
     coordinates remain repeated curve nodes in the generated SVG.
     """
 
-    source = Path(path)
-    points: list[TrackPoint] = []
-    with source.open("r", encoding="utf-8-sig", newline="") as handle:
-        reader = csv.DictReader(handle)
-        required = {"Timestamp", "UTC", "Callsign", "Position"}
-        missing = required.difference(reader.fieldnames or ())
-        if missing:
-            raise TrackDataError(f"missing CSV columns: {', '.join(sorted(missing))}")
+    from .fr24 import load_fr24
 
-        for row_number, row in enumerate(reader, start=2):
-            try:
-                timestamp = float(row["Timestamp"])
-            except (TypeError, ValueError) as exc:
-                raise TrackDataError(
-                    f"row {row_number}: invalid Timestamp: {row.get('Timestamp')!r}"
-                ) from exc
+    return load_fr24(path).track
 
-            position = (row.get("Position") or "").split(",")
-            if len(position) != 2:
-                raise TrackDataError(
-                    f"row {row_number}: Position must be 'latitude,longitude'"
-                )
-            try:
-                latitude, longitude = (float(part.strip()) for part in position)
-            except ValueError as exc:
-                raise TrackDataError(
-                    f"row {row_number}: invalid Position: {row.get('Position')!r}"
-                ) from exc
-            if not -90.0 <= latitude <= 90.0:
-                raise TrackDataError(f"row {row_number}: latitude out of range")
-            if not -180.0 <= longitude <= 180.0:
-                raise TrackDataError(f"row {row_number}: longitude out of range")
 
-            points.append(
-                TrackPoint(
-                    timestamp=timestamp,
-                    utc=_parse_utc(row.get("UTC"), timestamp, row_number=row_number),
-                    callsign=(row.get("Callsign") or "").strip(),
-                    latitude=latitude,
-                    longitude=longitude,
-                    altitude=_optional_float(
-                        row.get("Altitude"), row_number=row_number, field="Altitude"
-                    ),
-                    speed=_optional_float(
-                        row.get("Speed"), row_number=row_number, field="Speed"
-                    ),
-                    direction=_optional_float(
-                        row.get("Direction"), row_number=row_number, field="Direction"
-                    ),
-                )
+def endpoint_distance_km(first: Track, second: Track) -> float:
+    """Great-circle distance from the first leg's end to the second leg's start."""
+
+    lat1, lon1 = radians(first.end.latitude), radians(first.end.longitude)
+    lat2, lon2 = radians(second.start.latitude), radians(second.start.longitude)
+    dlat, dlon = lat2 - lat1, lon2 - lon1
+    value = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
+    return 6371.0088 * 2 * asin(sqrt(value))
+
+
+def validate_leg_order(
+    tracks: list[Track] | tuple[Track, ...], *, tolerance_km: float = 50.0
+) -> tuple[float, ...]:
+    """Validate ordered end-to-start connections and return their distances."""
+
+    if tolerance_km <= 0:
+        raise ValueError("continuity tolerance must be greater than zero")
+    distances = tuple(endpoint_distance_km(a, b) for a, b in zip(tracks, tracks[1:]))
+    for index, distance in enumerate(distances, start=1):
+        if distance > tolerance_km:
+            raise TrackDataError(
+                f"leg {index} does not connect to leg {index + 1}: "
+                f"end-to-start distance is {distance:.1f} km"
             )
-
-    if len(points) < 2:
-        raise TrackDataError("at least two ADS-B points are required")
-    points.sort(key=lambda point: point.timestamp)
-    return Track(
-        source=source,
-        points=tuple(points),
-        waypoint_indices=(0, len(points) - 1),
-    )
+    return distances
 
 
 def combine_tracks(
     paths: list[str | Path] | tuple[str | Path, ...],
     *,
     source_name: str = "itinerary",
+    validate_continuity: bool = False,
+    tolerance_km: float = 50.0,
 ) -> Track:
     """Combine ordered flight legs without re-sorting across leg boundaries."""
 
     if not paths:
         raise TrackDataError("at least one ADS-B CSV file is required")
     legs = [load_track(path) for path in paths]
+    if validate_continuity:
+        validate_leg_order(legs, tolerance_km=tolerance_km)
     points: list[TrackPoint] = []
     waypoint_indices = [0]
     for leg in legs:
