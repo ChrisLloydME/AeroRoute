@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" width="16000" height="10000" style="background-color:#B2BAC3;background:#B2BAC3" overflow="hidden" role="img" aria-labelledby="map-title map-description" data-source-points="708">
-  <title id="map-title">FI213 flight track</title>
+  <title id="map-title">FI217 flight track</title>
   <desc id="map-description">ADS-B track rendered from all 708 source positions as an interpolating cubic Bezier path.</desc>
   <g id="background">
     <rect id="ocean" x="0" y="0" width="1600" height="1000" fill="#B2BAC3" />
@@ -27,7 +27,7 @@
     <text x="726.549" y="286.262" fill="#171D21" font-size="14" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-weight="600" text-anchor="start">KEF · Keflavik</text>
   </g>
   <g id="flight-metadata">
-    <text x="72.000" y="864.000" fill="#171D21" font-size="57.142857142857146" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-weight="600" text-anchor="start" letter-spacing="0.5">FI213</text>
+    <text x="72.000" y="864.000" fill="#171D21" font-size="57.142857142857146" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-weight="600" text-anchor="start" letter-spacing="0.5">FI217</text>
     <text x="72.000" y="905.000" fill="#171D21" font-size="22" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-weight="500" text-anchor="start" letter-spacing="0.6">COPENHAGEN — KEFLAVIK</text>
     <line x1="72.000" x2="352.000" y1="922.000" y2="922.000" stroke="#E05B45" stroke-width="2" />
     <text x="72.000" y="948.000" fill="#171D21" font-size="15" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-weight="400" text-anchor="start" letter-spacing="0.4" opacity="0.82">13 JUL 2026 · 4H 12M</text>

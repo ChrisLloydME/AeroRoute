@@ -1,22 +1,28 @@
 # AeroRoute
 
-AeroRoute turns ADS-B CSV flight tracks into deterministic, editable SVG world
-maps. It includes a native PySide6 macOS app and a dependency-free command-line
-renderer. It uses every valid input position: no sampling, deduplication, moving
-average, or route reconstruction is applied.
+AeroRoute converts one or more Flightradar24/ADS-B CSV tracks into deterministic,
+editable SVG world maps. It provides both a dependency-free command-line renderer
+and a native PySide6 macOS app.
 
-The route is not a polyline. After equirectangular projection, every adjacent
-pair of source points becomes a cubic Bézier segment in a chord-length
-parameterized interpolating spline. The curve therefore passes through every
-source point while showing no waypoint dots or straight-line joins.
+Every valid source position is retained. AeroRoute does not sample, smooth, or
+reconstruct the track: adjacent positions are joined by an interpolating cubic
+Bézier spline that passes through every input point.
 
-## Quick start
+## Requirements
 
-Python 3.10 or newer is sufficient; there are no runtime dependencies.
+- Python 3.10 or newer for the command-line renderer.
+- PySide6 for the desktop app.
+- macOS and Xcode for building the standalone `.app` bundle.
+
+No network connection or map service is required at runtime.
+
+## Command-line usage
+
+Run the renderer directly from a source checkout:
 
 ```bash
-python3 -m aeroroute "examples/data/LX188_40a4c777.csv" \
-  --output LX188.svg \
+python3 -m aeroroute examples/data/lx188.csv \
+  --output lx188.svg \
   --show-flight-number \
   --flight-number LX188 \
   --show-airports \
@@ -26,123 +32,172 @@ python3 -m aeroroute "examples/data/LX188_40a4c777.csv" \
   --destination-name "Shanghai Pudong"
 ```
 
-The repository's [`examples/data`](examples/data) directory contains sample
-Flightradar24 tracks, with matching rendered maps in
-[`examples/output`](examples/output).
+The command reports the input point count and generated cubic-segment count. A
+track containing `N` positions produces `N - 1` cubic segments.
 
-The command reports the input point count and generated cubic-segment count.
-For a track containing `N` points, the SVG contains `N - 1` cubic segments. It
-also embeds these values as `data-source-points` and `data-curve-segments` on
-the route geometry.
+To install the `aeroroute` command in an isolated development environment:
 
-## Map controls
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e .
+aeroroute --help
+```
+
+### Multi-leg routes
+
+Pass CSV files in itinerary order. Adjacent tracks must connect within 50 km.
+
+```bash
+python3 -m aeroroute \
+  examples/data/sk2596.csv \
+  examples/data/lx1279.csv \
+  --output kef-cph-zrh.svg \
+  --show-airports \
+  --show-flight-number \
+  --flight-number ITINERARY \
+  --waypoint-codes KEF,CPH,ZRH \
+  --waypoint-names Keflavik,Copenhagen,Zurich
+```
+
+### Common options
 
 ```text
---borders / --no-borders       Toggle national borders
---country-labels               Show major country names (off by default)
---show-airports                Show origin and destination labels
---show-flight-number           Show the editorial flight information block
---flight-number TEXT           Override the filename-derived flight number
---origin-code TEXT             Origin IATA/ICAO code, e.g. ZRH
---destination-code TEXT        Destination IATA/ICAO code, e.g. PVG
---origin-name TEXT             Origin label and metadata name
---destination-name TEXT        Destination label and metadata name
---waypoint-codes A,B,C         Airport codes for an ordered multi-leg map
---waypoint-names A,B,C         Airport names for an ordered multi-leg map
---route-name TEXT              Override the metadata route subtitle
---metadata-detail TEXT         Override the date/duration detail line
---width PX --height PX         SVG canvas size (default 1600 × 1000)
---scale N                      Scale the physical SVG size and all artwork
---route-width PX               Route stroke width
+-o, --output PATH             Output SVG path (required)
+--borders / --no-borders      Toggle national borders
+--country-labels              Show major country names
+--show-airports               Show airport and waypoint labels
+--show-flight-number          Show the flight information block
+--flight-number TEXT          Override the filename-derived flight number
+--origin-code TEXT            Origin IATA/ICAO code
+--destination-code TEXT       Destination IATA/ICAO code
+--origin-name TEXT            Origin display name
+--destination-name TEXT       Destination display name
+--waypoint-codes A,B,C        Ordered multi-leg airport codes
+--waypoint-names A,B,C        Ordered multi-leg airport names
+--width PX --height PX        Design canvas size (default 1600 × 1000)
+--scale N                     Physical output multiplier
+--route-width PX              Route stroke width
 ```
 
-All visual colors are configurable:
+Colors can be customized with `--ocean-color`, `--land-color`,
+`--coastline-color`, `--border-color`, `--route-color`, `--marker-color`, and
+`--text-color`. Run `python3 -m aeroroute --help` for the complete reference.
 
-```text
---ocean-color --land-color --coastline-color --border-color
---route-color --marker-color --text-color
-```
+Use `--scale 10` to declare a `16000 × 10000` physical SVG while retaining the
+`1600 × 1000` design viewBox and proportional artwork.
 
-To create a `16000 × 10000` SVG with every visual element enlarged in the same
-10:1 proportion, keep the default design canvas and use:
+## Desktop app
+
+Install the app dependency and launch the development version:
 
 ```bash
-python3 -m aeroroute input.csv --output output.svg --scale 10
+source .venv/bin/activate
+python -m pip install -e ".[app]"
+aeroroute-app
 ```
 
-The SVG keeps a `1600 × 1000` viewBox while declaring a physical size of
-`16000 × 10000`. Strokes, markers, labels, and metadata therefore scale with
-the map instead of becoming relatively thinner.
+Drop one or more CSV files onto the window, arrange multi-leg files in itinerary
+order, edit the labels and colors, then choose **Export SVG**. The preview and
+export use the same parser and renderer. Export is disabled when adjacent legs
+are more than 50 km apart.
 
-For the complete command reference:
+## Build the macOS app
 
-```bash
-python3 -m aeroroute --help
-```
+The build requires:
 
-## macOS app
+- macOS with the full Xcode app installed (`xcrun --find actool` must succeed).
+- Python 3.10 or newer.
+- A universal2 Python installation when building the default universal bundle.
+- Network access on the first build to install PySide6 and PyInstaller.
 
-The app accepts one or more standard Flightradar24 CSV downloads. Drop files
-onto the window, drag them into itinerary order, edit the airport labels, and
-export SVG. For multiple legs, every file must begin near the endpoint of the
-previous file. AeroRoute reports the discontinuity and disables export when the
-ordered connection is greater than 50 km.
-
-The live preview uses the same parser, projection, point set, curve generator,
-and SVG renderer as the final export. Output scale defaults to 10, producing a
-`16000 × 10000` SVG from the `1600 × 1000` design canvas without making the
-route relatively thinner.
-
-Build a standalone app containing Python, Qt, the SVG renderer, and map data:
+Build for both Apple Silicon and Intel Macs:
 
 ```bash
-chmod +x scripts/build_macos.sh
 scripts/build_macos.sh universal2
 ```
 
-Build products are written to `dist/` and intermediate files to `build/`.
-Both directories, along with `.app`, `.dmg`, `.pkg`, and `.xcarchive` bundles,
-are excluded from Git.
+Architecture-specific builds are also supported:
 
-Valid targets are `universal2`, `arm64`, and `x86_64`. The universal build runs
-natively on both Apple Silicon and Intel Macs when the selected Python and all
-binary wheels contain both architectures. The checked build configuration uses
-macOS 13 as its minimum version and intentionally performs no Developer ID
-signing or Apple notarization.
+```bash
+scripts/build_macos.sh arm64
+scripts/build_macos.sh x86_64
+```
 
-Because the app is unsigned, macOS Gatekeeper may quarantine a copy transferred
-from another computer. This is expected for the requested unsigned build and is
-separate from whether dependencies are bundled.
+The script:
 
-## Flightradar24 input
+1. Creates or reuses `.venv-build`.
+2. Installs the `app` and `build` extras declared in `pyproject.toml`.
+3. Compiles `AppIcon.icon` with Xcode's asset compiler.
+4. Runs PyInstaller using `AeroRoute.spec`.
+5. Verifies the executable, Python, and Qt architecture slices.
 
-The import adapter recognizes the standard Flightradar24 flight-track columns:
+The finished app is written to `dist/AeroRoute.app`. Intermediate files go to
+`build/`. Both directories and common macOS distribution formats are ignored by
+Git, so compiled app bundles are not pushed to GitHub.
+
+To use a specific Python interpreter or build environment directory:
+
+```bash
+PYTHON_BIN=/path/to/python3 VENV_DIR=.venv-build scripts/build_macos.sh universal2
+```
+
+To verify an existing bundle separately:
+
+```bash
+scripts/verify_macos_bundle.sh dist/AeroRoute.app universal2
+```
+
+The app is intentionally unsigned and not notarized. Gatekeeper may quarantine
+a bundle copied to another Mac; signing and notarization are separate release
+steps and are not performed by this repository.
+
+## CSV input
+
+AeroRoute accepts the standard Flightradar24 columns:
 
 ```csv
 Timestamp,UTC,Callsign,Position,Altitude,Speed,Direction
 1783940888,2026-07-13T11:08:08Z,SWR188,"47.452629,8.557839",0,0,275
 ```
 
-Rows are validated and then sorted by `Timestamp`. Invalid coordinates produce
-an explicit error rather than being silently discarded. Repeated positions are
-retained as source nodes.
+Rows are sorted by `Timestamp`. Invalid coordinates produce an explicit error,
+and repeated positions are retained. The map uses a fixed equirectangular
+projection and is letterboxed at 60°S.
 
-The map uses a fixed equirectangular layout: longitude maps linearly to x and
-latitude maps linearly to y. No Mercator scaling, great-circle bowing, or
-latitude-dependent horizontal adjustment is applied. The visible map is
-letterboxed and stops at 60°S, matching the clean MapChart-style composition.
+## Examples
 
-## Tests
+- [`examples/data`](examples/data) contains six compactly named CSV tracks used
+  by the test suite and README commands.
+- [`examples/output`](examples/output) contains representative rendered SVGs.
+- [`examples/README.md`](examples/README.md) lists the example naming convention.
+
+## Development and tests
+
+Run the test suite from the repository root:
 
 ```bash
 python3 -m unittest discover -s tests -v
 ```
 
-The tests verify that LX188's 2,697 CSV rows produce 2,696 cubic segments, that
-only the two endpoint markers are visible, and that PVG is placed from the exact
-CSV endpoint (`31.133997, 121.823753`).
+Build a wheel without changing the source tree:
 
-## Map data
+```bash
+python -m pip wheel . --no-deps --wheel-dir /tmp/aeroroute-wheel
+```
 
-The offline world outline and optional country borders use Natural Earth 1:110m
-public-domain vector data. No road, terrain, or satellite layers are included.
+## Repository layout
+
+```text
+aeroroute/       Python package, CLI, GUI, renderer, and bundled map data
+docs/            Product and design documentation
+examples/data/   Example Flightradar24 CSV tracks
+examples/output/ Example SVG renders
+resources/       Xcode asset catalog metadata
+scripts/         macOS build and bundle-verification scripts
+tests/           Unit tests
+```
+
+The offline map geometry comes from Natural Earth 1:110m public-domain data.
+AeroRoute is released under the [MIT License](LICENSE).

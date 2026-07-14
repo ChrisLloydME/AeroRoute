@@ -1,14 +1,21 @@
 # Examples
 
-`data/` contains sample Flightradar24 CSV flight tracks used by the test suite
-and the commands in the main README. `output/` contains representative SVG maps
-rendered from those tracks.
+Example filenames use lowercase flight numbers without provider download IDs:
 
-To render an example locally:
-
-```bash
-python3 -m aeroroute examples/data/LX188_40a4c777.csv --output LX188.svg
+```text
+data/lx188.csv
+output/flight-lx188.svg
 ```
 
-Generated macOS applications and release archives are not examples. The build
-scripts place those artifacts in the ignored `dist/` directory.
+`data/` contains six Flightradar24 CSV tracks used by the test suite and the
+commands in the main README. `output/` contains representative SVG maps,
+including single-flight and multi-leg renders.
+
+Render an example from the repository root:
+
+```bash
+python3 -m aeroroute examples/data/lx188.csv --output lx188.svg
+```
+
+Generated applications and release archives are not examples. The macOS build
+places those artifacts in the ignored `dist/` directory.

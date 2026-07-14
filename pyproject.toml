@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aeroroute"
-version = "0.2.0"
+dynamic = ["version"]
 description = "Generate deterministic SVG flight maps from ADS-B CSV tracks"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -21,3 +21,9 @@ build = ["PyInstaller==6.21.0"]
 
 [tool.setuptools.package-data]
 aeroroute = ["data/*.geojson", "data/*.md"]
+
+[tool.setuptools.packages.find]
+include = ["aeroroute*"]
+
+[tool.setuptools.dynamic]
+version = {attr = "aeroroute._version.__version__"}
