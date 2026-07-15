@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
-from aeroroute.geometry import interpolating_bezier_path, project
+from aeroroute.geometry import interpolating_bezier_path, map_viewport, project
 from aeroroute.fr24 import load_fr24
 from aeroroute.model import TrackDataError, combine_tracks, load_track, validate_leg_order
 from aeroroute.svg import MapStyle, RenderOptions, build_svg, write_svg
@@ -49,6 +49,13 @@ class TrackTests(unittest.TestCase):
         _, y_east = project(150.0, 30.0, 1600, 1000)
         self.assertEqual(x_low, x_high)
         self.assertEqual(y_west, y_east)
+
+    def test_map_spans_the_full_canvas_width(self) -> None:
+        left, _, right, _ = map_viewport(1600, 1000)
+        self.assertEqual(left, 0)
+        self.assertEqual(right, 1600)
+        self.assertEqual(project(-180.0, 0.0, 1600, 1000)[0], 0)
+        self.assertEqual(project(180.0, 0.0, 1600, 1000)[0], 1600)
 
     def test_physical_scale_enlarges_all_artwork_proportionally(self) -> None:
         svg, _ = build_svg(self.track, options=RenderOptions(scale=10))

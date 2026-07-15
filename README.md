@@ -164,7 +164,7 @@ Timestamp,UTC,Callsign,Position,Altitude,Speed,Direction
 
 Rows are sorted by `Timestamp`. Invalid coordinates produce an explicit error,
 and repeated positions are retained. The map uses a fixed equirectangular
-projection and is letterboxed at 60°S.
+projection, spans the full canvas width, and is cropped at 60°S.
 
 ## Examples
 

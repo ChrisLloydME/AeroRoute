@@ -9,12 +9,13 @@ Point2D = tuple[float, float]
 def map_viewport(width: float, height: float) -> tuple[float, float, float, float]:
     """Return the flat-map drawing bounds: left, top, right, bottom.
 
-    The geographic window is deliberately letterboxed like MapChart rather
-    than stretched to the canvas. Antarctica is outside the visible latitude
-    range, leaving useful ocean space for the editorial metadata block.
+    The full longitude range is pinned to the canvas edges so routes crossing
+    the antimeridian wrap exactly at the left and right boundaries. Antarctica
+    remains outside the visible latitude range, leaving useful ocean space for
+    the editorial metadata block.
     """
 
-    return width * 0.075, height * 0.19, width * 0.925, height * 0.82
+    return 0.0, height * 0.19, width, height * 0.82
 
 
 def project(longitude: float, latitude: float, width: float, height: float) -> Point2D:
