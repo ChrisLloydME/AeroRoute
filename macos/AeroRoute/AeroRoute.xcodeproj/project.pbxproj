@@ -6,6 +6,10 @@
 	objectVersion = 110;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		90F93615CDCE46BEA51F6744 /* AeroRouteCore in Frameworks */ = {isa = PBXBuildFile; productRef = 6EE426457A544E74825D9379 /* AeroRouteCore */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		6E581FA2300767E1008EBFFA /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -51,6 +55,7 @@
 		6E581F91300767DF008EBFFA /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
+				90F93615CDCE46BEA51F6744 /* AeroRouteCore in Frameworks */,
 			);
 		};
 		6E581F9E300767E1008EBFFA /* Frameworks */ = {
@@ -103,6 +108,9 @@
 				6E581F96300767DF008EBFFA /* AeroRoute */,
 			);
 			name = AeroRoute;
+			packageProductDependencies = (
+				6EE426457A544E74825D9379 /* AeroRouteCore */,
+			);
 			productName = AeroRoute;
 			productReference = 6E581F94300767DF008EBFFA /* AeroRoute.app */;
 			productType = "com.apple.product-type.application";
@@ -181,6 +189,9 @@
 			);
 			mainGroup = 6E581F8B300767DF008EBFFA;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				49E5202A47D244E58C6704FE /* XCLocalSwiftPackageReference "../../AeroRouteCore" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 6E581F95300767DF008EBFFA /* Products */;
 			projectDirPath = "";
@@ -370,7 +381,7 @@
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_USER_SELECTED_FILES = readonly;
+				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = AeroRoute;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
@@ -416,7 +427,7 @@
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_USER_SELECTED_FILES = readonly;
+				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = AeroRoute;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
@@ -589,6 +600,21 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		49E5202A47D244E58C6704FE /* XCLocalSwiftPackageReference "../../AeroRouteCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../AeroRouteCore;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		6EE426457A544E74825D9379 /* AeroRouteCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 49E5202A47D244E58C6704FE /* XCLocalSwiftPackageReference "../../AeroRouteCore" */;
+			productName = AeroRouteCore;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 6E581F8C300767DF008EBFFA /* Project object */;
 	validationLevel = 1;
