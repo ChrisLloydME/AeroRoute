@@ -17,3 +17,10 @@ __pycache__/
 /dist/
 .pyinstaller-cache/
 *.spec.bak
+
+# SwiftPM and local Xcode build state
+/AeroRouteCore/.build/
+/AeroRouteCore/.swiftpm/
+/.deriveddata-codex/
+xcuserdata/
+*.xcuserstate
