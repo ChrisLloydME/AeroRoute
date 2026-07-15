@@ -1,0 +1,770 @@
+{
+  "schema_version": 1,
+  "reference_implementation": "AeroRoute Python renderer at captured HEAD",
+  "source_revision": "5ec3c7bc7c70ac443080c121470d9681bcfa4ccc",
+  "generator_environment": {
+    "python": {
+      "implementation": "CPython",
+      "version": "3.14.0",
+      "version_info": [
+        3,
+        14,
+        0
+      ]
+    },
+    "element_tree": {
+      "module": "xml.etree.ElementTree",
+      "version": "1.3.0"
+    },
+    "locale": {
+      "requested_lc_all": "C",
+      "runtime_lc_all": "C",
+      "preferred_encoding": "utf-8",
+      "filesystem_encoding": "utf-8",
+      "utf8_mode": true
+    },
+    "process_environment": {
+      "LC_ALL": "C",
+      "PYTHONHASHSEED": "0",
+      "PYTHONUTF8": "1",
+      "PYTHONDONTWRITEBYTECODE": "1"
+    }
+  },
+  "geojson": [
+    {
+      "path": "aeroroute/data/ne_110m_land.geojson",
+      "sha256": "9e0729ee253ca7d7a5c4ae9395fb1902264c5377c52e224d13dd85010e2835d9"
+    },
+    {
+      "path": "aeroroute/data/ne_110m_admin_0_countries.geojson",
+      "sha256": "6866c877d39cba9c357620878839b336d569f8c662d3cfab4cb1dbe2d39c977f"
+    }
+  ],
+  "fixtures": [
+    {
+      "id": "single-fi217",
+      "contract_status": "existing-reviewed-output-options",
+      "note": "Options reconstructed from the existing representative SVG.",
+      "inputs": [
+        {
+          "path": "examples/data/fi217.csv",
+          "sha256": "e0bc0fa8fa4bf38e216fae604469f5a325d76dc688d6ce0b74e44cc3cd8ddc3c"
+        }
+      ],
+      "argv": [
+        "python3",
+        "-m",
+        "aeroroute",
+        "examples/data/fi217.csv",
+        "-o",
+        "compatibility/golden/python/flight-fi217.svg",
+        "--scale",
+        "10",
+        "--show-airports",
+        "--show-flight-number",
+        "--flight-number",
+        "FI217",
+        "--origin-code",
+        "CPH",
+        "--destination-code",
+        "KEF",
+        "--origin-name",
+        "Copenhagen",
+        "--destination-name",
+        "Keflavik"
+      ],
+      "resolved_options": {
+        "render_options": {
+          "width": 1600,
+          "height": 1000,
+          "scale": 10.0,
+          "show_borders": true,
+          "show_country_labels": false,
+          "show_airports": true,
+          "show_flight_number": true,
+          "flight_number": "FI217",
+          "origin_code": "CPH",
+          "destination_code": "KEF",
+          "origin_name": "Copenhagen",
+          "destination_name": "Keflavik",
+          "waypoint_codes": [],
+          "waypoint_names": [],
+          "route_name": null,
+          "metadata_detail": null
+        },
+        "map_style": {
+          "ocean": "#B2BAC3",
+          "land": "#D9D9D9",
+          "coastline": "#787C80",
+          "borders": "#A9ADB2",
+          "route": "#183143",
+          "marker": "#E05B45",
+          "text": "#171D21",
+          "route_width": 1.2,
+          "coastline_width": 0.8,
+          "border_width": 0.55,
+          "font_family": "Helvetica Neue, Helvetica, Arial, sans-serif"
+        }
+      },
+      "output": {
+        "path": "compatibility/golden/python/flight-fi217.svg",
+        "sha256": "6a39a5d5520f9d48728fe8d99c4f65dd8ec0cb004a2e6223b0d66b31d3737f33"
+      },
+      "statistics": {
+        "points": 708,
+        "segments": 707,
+        "copy_shifts": [
+          0
+        ],
+        "waypoint_count": 2
+      }
+    },
+    {
+      "id": "single-lh2440",
+      "contract_status": "existing-reviewed-output-options",
+      "note": "Options reconstructed from the existing representative SVG.",
+      "inputs": [
+        {
+          "path": "examples/data/lh2440.csv",
+          "sha256": "9f1e527df5df0a3514f3bf71415d56ddaeda4ae3a4753998a9351760e98a9343"
+        }
+      ],
+      "argv": [
+        "python3",
+        "-m",
+        "aeroroute",
+        "examples/data/lh2440.csv",
+        "-o",
+        "compatibility/golden/python/flight-lh2440.svg",
+        "--scale",
+        "10",
+        "--show-airports",
+        "--show-flight-number",
+        "--flight-number",
+        "LH2440",
+        "--origin-code",
+        "MUC",
+        "--destination-code",
+        "CPH",
+        "--origin-name",
+        "Munich",
+        "--destination-name",
+        "Copenhagen"
+      ],
+      "resolved_options": {
+        "render_options": {
+          "width": 1600,
+          "height": 1000,
+          "scale": 10.0,
+          "show_borders": true,
+          "show_country_labels": false,
+          "show_airports": true,
+          "show_flight_number": true,
+          "flight_number": "LH2440",
+          "origin_code": "MUC",
+          "destination_code": "CPH",
+          "origin_name": "Munich",
+          "destination_name": "Copenhagen",
+          "waypoint_codes": [],
+          "waypoint_names": [],
+          "route_name": null,
+          "metadata_detail": null
+        },
+        "map_style": {
+          "ocean": "#B2BAC3",
+          "land": "#D9D9D9",
+          "coastline": "#787C80",
+          "borders": "#A9ADB2",
+          "route": "#183143",
+          "marker": "#E05B45",
+          "text": "#171D21",
+          "route_width": 1.2,
+          "coastline_width": 0.8,
+          "border_width": 0.55,
+          "font_family": "Helvetica Neue, Helvetica, Arial, sans-serif"
+        }
+      },
+      "output": {
+        "path": "compatibility/golden/python/flight-lh2440.svg",
+        "sha256": "dcc5b7a339d385ae5d7d3fd0694b2ce562cf86e4e4919706e01284ed7678b00e"
+      },
+      "statistics": {
+        "points": 443,
+        "segments": 442,
+        "copy_shifts": [
+          0
+        ],
+        "waypoint_count": 2
+      }
+    },
+    {
+      "id": "single-lh727",
+      "contract_status": "existing-reviewed-output-options",
+      "note": "Options reconstructed from the existing representative SVG.",
+      "inputs": [
+        {
+          "path": "examples/data/lh727.csv",
+          "sha256": "3ad9540c57f9dc94846bcbc3b9f48bfb53b96c940a7ee97c06467075e69f56ae"
+        }
+      ],
+      "argv": [
+        "python3",
+        "-m",
+        "aeroroute",
+        "examples/data/lh727.csv",
+        "-o",
+        "compatibility/golden/python/flight-lh727.svg",
+        "--scale",
+        "10",
+        "--show-airports",
+        "--show-flight-number",
+        "--flight-number",
+        "LH727",
+        "--origin-code",
+        "PVG",
+        "--destination-code",
+        "MUC",
+        "--origin-name",
+        "Shanghai Pudong",
+        "--destination-name",
+        "Munich"
+      ],
+      "resolved_options": {
+        "render_options": {
+          "width": 1600,
+          "height": 1000,
+          "scale": 10.0,
+          "show_borders": true,
+          "show_country_labels": false,
+          "show_airports": true,
+          "show_flight_number": true,
+          "flight_number": "LH727",
+          "origin_code": "PVG",
+          "destination_code": "MUC",
+          "origin_name": "Shanghai Pudong",
+          "destination_name": "Munich",
+          "waypoint_codes": [],
+          "waypoint_names": [],
+          "route_name": null,
+          "metadata_detail": null
+        },
+        "map_style": {
+          "ocean": "#B2BAC3",
+          "land": "#D9D9D9",
+          "coastline": "#787C80",
+          "borders": "#A9ADB2",
+          "route": "#183143",
+          "marker": "#E05B45",
+          "text": "#171D21",
+          "route_width": 1.2,
+          "coastline_width": 0.8,
+          "border_width": 0.55,
+          "font_family": "Helvetica Neue, Helvetica, Arial, sans-serif"
+        }
+      },
+      "output": {
+        "path": "compatibility/golden/python/flight-lh727.svg",
+        "sha256": "524f0a3ef62b5f54292348ba9c5242b028ac0cb4ebf5743aab393f845b7a0620"
+      },
+      "statistics": {
+        "points": 3182,
+        "segments": 3181,
+        "copy_shifts": [
+          0
+        ],
+        "waypoint_count": 2
+      }
+    },
+    {
+      "id": "single-lx1279",
+      "contract_status": "existing-reviewed-output-options",
+      "note": "Options reconstructed from the existing representative SVG.",
+      "inputs": [
+        {
+          "path": "examples/data/lx1279.csv",
+          "sha256": "6db537b3e80bb088e2aade59131af0b5c06340f42de10a28f3dffd2c3405f347"
+        }
+      ],
+      "argv": [
+        "python3",
+        "-m",
+        "aeroroute",
+        "examples/data/lx1279.csv",
+        "-o",
+        "compatibility/golden/python/flight-lx1279.svg",
+        "--scale",
+        "10",
+        "--show-airports",
+        "--show-flight-number",
+        "--flight-number",
+        "LX1279",
+        "--origin-code",
+        "CPH",
+        "--destination-code",
+        "ZRH",
+        "--origin-name",
+        "Copenhagen",
+        "--destination-name",
+        "Zurich"
+      ],
+      "resolved_options": {
+        "render_options": {
+          "width": 1600,
+          "height": 1000,
+          "scale": 10.0,
+          "show_borders": true,
+          "show_country_labels": false,
+          "show_airports": true,
+          "show_flight_number": true,
+          "flight_number": "LX1279",
+          "origin_code": "CPH",
+          "destination_code": "ZRH",
+          "origin_name": "Copenhagen",
+          "destination_name": "Zurich",
+          "waypoint_codes": [],
+          "waypoint_names": [],
+          "route_name": null,
+          "metadata_detail": null
+        },
+        "map_style": {
+          "ocean": "#B2BAC3",
+          "land": "#D9D9D9",
+          "coastline": "#787C80",
+          "borders": "#A9ADB2",
+          "route": "#183143",
+          "marker": "#E05B45",
+          "text": "#171D21",
+          "route_width": 1.2,
+          "coastline_width": 0.8,
+          "border_width": 0.55,
+          "font_family": "Helvetica Neue, Helvetica, Arial, sans-serif"
+        }
+      },
+      "output": {
+        "path": "compatibility/golden/python/flight-lx1279.svg",
+        "sha256": "61f48fe0f977b27908347ba9a900c92023cf20569bcc73c1f99ac020d3661b19"
+      },
+      "statistics": {
+        "points": 431,
+        "segments": 430,
+        "copy_shifts": [
+          0
+        ],
+        "waypoint_count": 2
+      }
+    },
+    {
+      "id": "single-lx188",
+      "contract_status": "existing-reviewed-output-options",
+      "note": "Options reconstructed from the existing representative SVG.",
+      "inputs": [
+        {
+          "path": "examples/data/lx188.csv",
+          "sha256": "ce16d380ed3cd8f1ededdc63dae8c62c8dd8bf09a942a119160831fa67e078ff"
+        }
+      ],
+      "argv": [
+        "python3",
+        "-m",
+        "aeroroute",
+        "examples/data/lx188.csv",
+        "-o",
+        "compatibility/golden/python/flight-lx188.svg",
+        "--scale",
+        "10",
+        "--show-airports",
+        "--show-flight-number",
+        "--flight-number",
+        "LX188",
+        "--origin-code",
+        "ZRH",
+        "--destination-code",
+        "PVG",
+        "--origin-name",
+        "Zurich",
+        "--destination-name",
+        "Shanghai Pudong"
+      ],
+      "resolved_options": {
+        "render_options": {
+          "width": 1600,
+          "height": 1000,
+          "scale": 10.0,
+          "show_borders": true,
+          "show_country_labels": false,
+          "show_airports": true,
+          "show_flight_number": true,
+          "flight_number": "LX188",
+          "origin_code": "ZRH",
+          "destination_code": "PVG",
+          "origin_name": "Zurich",
+          "destination_name": "Shanghai Pudong",
+          "waypoint_codes": [],
+          "waypoint_names": [],
+          "route_name": null,
+          "metadata_detail": null
+        },
+        "map_style": {
+          "ocean": "#B2BAC3",
+          "land": "#D9D9D9",
+          "coastline": "#787C80",
+          "borders": "#A9ADB2",
+          "route": "#183143",
+          "marker": "#E05B45",
+          "text": "#171D21",
+          "route_width": 1.2,
+          "coastline_width": 0.8,
+          "border_width": 0.55,
+          "font_family": "Helvetica Neue, Helvetica, Arial, sans-serif"
+        }
+      },
+      "output": {
+        "path": "compatibility/golden/python/flight-lx188.svg",
+        "sha256": "22a658ada8dd48c3ad4637e707017e7b308e9cb401875ac27d0d8483a557d618"
+      },
+      "statistics": {
+        "points": 2697,
+        "segments": 2696,
+        "copy_shifts": [
+          0
+        ],
+        "waypoint_count": 2
+      }
+    },
+    {
+      "id": "single-sk2596",
+      "contract_status": "existing-reviewed-output-options",
+      "note": "Options reconstructed from the existing representative SVG.",
+      "inputs": [
+        {
+          "path": "examples/data/sk2596.csv",
+          "sha256": "8c326e0b25e281fff2750938e61cf087811821af4c7a26026fe027fe769525cf"
+        }
+      ],
+      "argv": [
+        "python3",
+        "-m",
+        "aeroroute",
+        "examples/data/sk2596.csv",
+        "-o",
+        "compatibility/golden/python/flight-sk2596.svg",
+        "--scale",
+        "10",
+        "--show-airports",
+        "--show-flight-number",
+        "--flight-number",
+        "SK2596",
+        "--origin-code",
+        "KEF",
+        "--destination-code",
+        "CPH",
+        "--origin-name",
+        "Keflavik",
+        "--destination-name",
+        "Copenhagen"
+      ],
+      "resolved_options": {
+        "render_options": {
+          "width": 1600,
+          "height": 1000,
+          "scale": 10.0,
+          "show_borders": true,
+          "show_country_labels": false,
+          "show_airports": true,
+          "show_flight_number": true,
+          "flight_number": "SK2596",
+          "origin_code": "KEF",
+          "destination_code": "CPH",
+          "origin_name": "Keflavik",
+          "destination_name": "Copenhagen",
+          "waypoint_codes": [],
+          "waypoint_names": [],
+          "route_name": null,
+          "metadata_detail": null
+        },
+        "map_style": {
+          "ocean": "#B2BAC3",
+          "land": "#D9D9D9",
+          "coastline": "#787C80",
+          "borders": "#A9ADB2",
+          "route": "#183143",
+          "marker": "#E05B45",
+          "text": "#171D21",
+          "route_width": 1.2,
+          "coastline_width": 0.8,
+          "border_width": 0.55,
+          "font_family": "Helvetica Neue, Helvetica, Arial, sans-serif"
+        }
+      },
+      "output": {
+        "path": "compatibility/golden/python/flight-sk2596.svg",
+        "sha256": "ca557551fb162ff71aa85793e27c6033f64cc3cbe415dcb77b622d2bc3318b0e"
+      },
+      "statistics": {
+        "points": 645,
+        "segments": 644,
+        "copy_shifts": [
+          0
+        ],
+        "waypoint_count": 2
+      }
+    },
+    {
+      "id": "single-sq22-antimeridian",
+      "contract_status": "new-unreviewed-antimeridian-coverage",
+      "note": "Default output options only. This locks antimeridian geometry and does not claim reviewed SQ22 labels.",
+      "inputs": [
+        {
+          "path": "examples/data/sq22.csv",
+          "sha256": "80c9271e86b4089e73b40a3626dce84f2c4a4769227c999f82714751f5955f72"
+        }
+      ],
+      "argv": [
+        "python3",
+        "-m",
+        "aeroroute",
+        "examples/data/sq22.csv",
+        "-o",
+        "compatibility/golden/python/flight-sq22.svg"
+      ],
+      "resolved_options": {
+        "render_options": {
+          "width": 1600,
+          "height": 1000,
+          "scale": 1.0,
+          "show_borders": true,
+          "show_country_labels": false,
+          "show_airports": false,
+          "show_flight_number": false,
+          "flight_number": null,
+          "origin_code": null,
+          "destination_code": null,
+          "origin_name": null,
+          "destination_name": null,
+          "waypoint_codes": [],
+          "waypoint_names": [],
+          "route_name": null,
+          "metadata_detail": null
+        },
+        "map_style": {
+          "ocean": "#B2BAC3",
+          "land": "#D9D9D9",
+          "coastline": "#787C80",
+          "borders": "#A9ADB2",
+          "route": "#183143",
+          "marker": "#E05B45",
+          "text": "#171D21",
+          "route_width": 1.2,
+          "coastline_width": 0.8,
+          "border_width": 0.55,
+          "font_family": "Helvetica Neue, Helvetica, Arial, sans-serif"
+        }
+      },
+      "output": {
+        "path": "compatibility/golden/python/flight-sq22.svg",
+        "sha256": "f8b91b7304679101cf63784ca28f4561fa4ca2579a36b64fd4f1a74d4c27acb2"
+      },
+      "statistics": {
+        "points": 1794,
+        "segments": 1793,
+        "copy_shifts": [
+          -1,
+          0
+        ],
+        "waypoint_count": 2
+      }
+    },
+    {
+      "id": "itinerary-kef-cph-zrh-pvg",
+      "contract_status": "existing-reviewed-output-options",
+      "note": "Options reconstructed from the existing representative itinerary SVG.",
+      "inputs": [
+        {
+          "path": "examples/data/sk2596.csv",
+          "sha256": "8c326e0b25e281fff2750938e61cf087811821af4c7a26026fe027fe769525cf"
+        },
+        {
+          "path": "examples/data/lx1279.csv",
+          "sha256": "6db537b3e80bb088e2aade59131af0b5c06340f42de10a28f3dffd2c3405f347"
+        },
+        {
+          "path": "examples/data/lx188.csv",
+          "sha256": "ce16d380ed3cd8f1ededdc63dae8c62c8dd8bf09a942a119160831fa67e078ff"
+        }
+      ],
+      "argv": [
+        "python3",
+        "-m",
+        "aeroroute",
+        "examples/data/sk2596.csv",
+        "examples/data/lx1279.csv",
+        "examples/data/lx188.csv",
+        "-o",
+        "compatibility/golden/python/itinerary-kef-cph-zrh-pvg.svg",
+        "--scale",
+        "10",
+        "--show-airports",
+        "--show-flight-number",
+        "--flight-number",
+        "KEF–CPH–ZRH–PVG",
+        "--waypoint-codes",
+        "KEF,CPH,ZRH,PVG",
+        "--waypoint-names",
+        "Keflavik,Copenhagen,Zurich,Shanghai Pudong",
+        "--metadata-detail",
+        "SK2596 · LX1279 · LX188"
+      ],
+      "resolved_options": {
+        "render_options": {
+          "width": 1600,
+          "height": 1000,
+          "scale": 10.0,
+          "show_borders": true,
+          "show_country_labels": false,
+          "show_airports": true,
+          "show_flight_number": true,
+          "flight_number": "KEF–CPH–ZRH–PVG",
+          "origin_code": null,
+          "destination_code": null,
+          "origin_name": null,
+          "destination_name": null,
+          "waypoint_codes": [
+            "KEF",
+            "CPH",
+            "ZRH",
+            "PVG"
+          ],
+          "waypoint_names": [
+            "Keflavik",
+            "Copenhagen",
+            "Zurich",
+            "Shanghai Pudong"
+          ],
+          "route_name": null,
+          "metadata_detail": "SK2596 · LX1279 · LX188"
+        },
+        "map_style": {
+          "ocean": "#B2BAC3",
+          "land": "#D9D9D9",
+          "coastline": "#787C80",
+          "borders": "#A9ADB2",
+          "route": "#183143",
+          "marker": "#E05B45",
+          "text": "#171D21",
+          "route_width": 1.2,
+          "coastline_width": 0.8,
+          "border_width": 0.55,
+          "font_family": "Helvetica Neue, Helvetica, Arial, sans-serif"
+        }
+      },
+      "output": {
+        "path": "compatibility/golden/python/itinerary-kef-cph-zrh-pvg.svg",
+        "sha256": "9fdd489464a3b9baab28a57c48522d1704e58585d85e26517ba3434361cff1b0"
+      },
+      "statistics": {
+        "points": 3773,
+        "segments": 3772,
+        "copy_shifts": [
+          0
+        ],
+        "waypoint_count": 4
+      }
+    },
+    {
+      "id": "itinerary-pvg-muc-cph-kef",
+      "contract_status": "existing-reviewed-output-options",
+      "note": "FI213 is intentionally preserved as the reviewed metadata-detail contract even though the input filename is fi217.csv.",
+      "inputs": [
+        {
+          "path": "examples/data/lh727.csv",
+          "sha256": "3ad9540c57f9dc94846bcbc3b9f48bfb53b96c940a7ee97c06467075e69f56ae"
+        },
+        {
+          "path": "examples/data/lh2440.csv",
+          "sha256": "9f1e527df5df0a3514f3bf71415d56ddaeda4ae3a4753998a9351760e98a9343"
+        },
+        {
+          "path": "examples/data/fi217.csv",
+          "sha256": "e0bc0fa8fa4bf38e216fae604469f5a325d76dc688d6ce0b74e44cc3cd8ddc3c"
+        }
+      ],
+      "argv": [
+        "python3",
+        "-m",
+        "aeroroute",
+        "examples/data/lh727.csv",
+        "examples/data/lh2440.csv",
+        "examples/data/fi217.csv",
+        "-o",
+        "compatibility/golden/python/itinerary-pvg-muc-cph-kef.svg",
+        "--scale",
+        "10",
+        "--show-airports",
+        "--show-flight-number",
+        "--flight-number",
+        "PVG–MUC–CPH–KEF",
+        "--waypoint-codes",
+        "PVG,MUC,CPH,KEF",
+        "--waypoint-names",
+        "Shanghai Pudong,Munich,Copenhagen,Keflavik",
+        "--metadata-detail",
+        "LH727 · LH2440 · FI213"
+      ],
+      "resolved_options": {
+        "render_options": {
+          "width": 1600,
+          "height": 1000,
+          "scale": 10.0,
+          "show_borders": true,
+          "show_country_labels": false,
+          "show_airports": true,
+          "show_flight_number": true,
+          "flight_number": "PVG–MUC–CPH–KEF",
+          "origin_code": null,
+          "destination_code": null,
+          "origin_name": null,
+          "destination_name": null,
+          "waypoint_codes": [
+            "PVG",
+            "MUC",
+            "CPH",
+            "KEF"
+          ],
+          "waypoint_names": [
+            "Shanghai Pudong",
+            "Munich",
+            "Copenhagen",
+            "Keflavik"
+          ],
+          "route_name": null,
+          "metadata_detail": "LH727 · LH2440 · FI213"
+        },
+        "map_style": {
+          "ocean": "#B2BAC3",
+          "land": "#D9D9D9",
+          "coastline": "#787C80",
+          "borders": "#A9ADB2",
+          "route": "#183143",
+          "marker": "#E05B45",
+          "text": "#171D21",
+          "route_width": 1.2,
+          "coastline_width": 0.8,
+          "border_width": 0.55,
+          "font_family": "Helvetica Neue, Helvetica, Arial, sans-serif"
+        }
+      },
+      "output": {
+        "path": "compatibility/golden/python/itinerary-pvg-muc-cph-kef.svg",
+        "sha256": "b40ab26acb2bff4aa8874de4c5074f4cd4a94de4ea87c545f39be8dfa47c1b01"
+      },
+      "statistics": {
+        "points": 4333,
+        "segments": 4332,
+        "copy_shifts": [
+          0
+        ],
+        "waypoint_count": 4
+      }
+    }
+  ]
+}
