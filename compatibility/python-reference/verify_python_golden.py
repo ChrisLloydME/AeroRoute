@@ -21,9 +21,10 @@ from typing import Any
 from xml.etree import ElementTree as ET
 
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+REFERENCE_ROOT = Path(__file__).resolve().parent
+ROOT = REFERENCE_ROOT.parents[1]
+if str(REFERENCE_ROOT) not in sys.path:
+    sys.path.insert(0, str(REFERENCE_ROOT))
 GOLDEN_DIR = ROOT / "compatibility" / "golden" / "python"
 MANIFEST_PATH = GOLDEN_DIR / "manifest.json"
 SVG_NS = "http://www.w3.org/2000/svg"
@@ -276,6 +277,7 @@ def _run_cli(spec: FixtureSpec, destination: Path) -> str:
     argv[output_index] = str(destination)
     environment = os.environ.copy()
     environment.update(GENERATOR_ENVIRONMENT)
+    environment["PYTHONPATH"] = str(REFERENCE_ROOT)
     completed = subprocess.run(
         [sys.executable, *argv[1:]],
         cwd=ROOT,
@@ -312,7 +314,8 @@ def verify() -> None:
             raise VerificationError(f"manifest generator_environment.{key} is missing")
 
     expected_geojson = [
-        {"path": path, "sha256": _sha256(ROOT / path)} for path in GEOJSON_PATHS
+        {"path": path, "sha256": _sha256(REFERENCE_ROOT / path)}
+        for path in GEOJSON_PATHS
     ]
     _expect_equal(manifest.get("geojson"), expected_geojson, "GeoJSON inputs")
 

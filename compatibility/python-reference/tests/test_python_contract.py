@@ -14,10 +14,10 @@ from aeroroute.model import TrackDataError, combine_tracks, load_track, validate
 from aeroroute.svg import RenderOptions, build_svg, write_svg
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 EXAMPLE_DATA = ROOT / "examples" / "data"
 GOLDEN_DIR = ROOT / "compatibility" / "golden" / "python"
-VERIFY_SCRIPT = ROOT / "compatibility" / "verify_python_golden.py"
+VERIFY_SCRIPT = ROOT / "compatibility" / "python-reference" / "verify_python_golden.py"
 SVG_NS = {"svg": "http://www.w3.org/2000/svg"}
 HEADER = "Timestamp,UTC,Callsign,Position,Altitude,Speed,Direction\n"
 

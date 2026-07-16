@@ -11,7 +11,7 @@ from aeroroute.fr24 import load_fr24
 from aeroroute.model import TrackDataError, combine_tracks, load_track, validate_leg_order
 from aeroroute.svg import MapStyle, RenderOptions, build_svg, write_svg
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 EXAMPLE_DATA = ROOT / "examples" / "data"
 LX188 = EXAMPLE_DATA / "lx188.csv"
 SVG_NS = {"svg": "http://www.w3.org/2000/svg"}
