@@ -46,43 +46,8 @@ struct RouteDetailView: View {
             }
 #endif
         }
-#if os(macOS)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            RouteStatusBar(workspace: workspace)
-        }
-#endif
     }
 }
-
-#if os(macOS)
-private struct RouteStatusBar: View {
-    @ObservedObject var workspace: RouteWorkspace
-
-    var body: some View {
-        HStack(spacing: 6) {
-            if workspace.isRendering || workspace.isExporting {
-                ProgressView()
-                    .controlSize(.mini)
-            } else {
-                Image(
-                    systemName: workspace.renderError == nil
-                        ? "checkmark.circle"
-                        : "exclamationmark.triangle"
-                )
-            }
-            Text(workspace.statusMessage)
-                .lineLimit(1)
-            Spacer()
-        }
-        .font(.caption)
-        .foregroundStyle(workspace.renderError == nil ? Color.secondary : Color.red)
-        .padding(.horizontal, 10)
-        .frame(height: 26)
-        .background(.bar)
-        .accessibilityElement(children: .combine)
-    }
-}
-#endif
 
 private struct RouteMapPane: View {
     @ObservedObject var workspace: RouteWorkspace
@@ -100,25 +65,30 @@ private struct RouteMapPane: View {
                 ProgressView("Rendering flight map…")
                     .controlSize(.large)
             } else if let error = workspace.renderError {
-                ContentUnavailableView {
-                    Label("Route Cannot Be Rendered", systemImage: "exclamationmark.triangle")
-                } description: {
+                VStack(spacing: 10) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.title2)
+                        .foregroundStyle(.secondary)
+                    Text("Route Cannot Be Rendered")
+                        .font(.headline)
                     Text(error)
-                } actions: {
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
                     Button("Validate Again") {
                         workspace.validateNow()
                     }
                 }
+                .padding(20)
             } else {
-                ContentUnavailableView {
-                    Label("Import Flight Tracks", systemImage: "map")
-                } description: {
-                    Text("Drop CSV files here or use Import CSV in the toolbar.")
-                } actions: {
-                    Button("Import CSV…") {
-                        workspace.isImporterPresented = true
-                    }
+                VStack(spacing: 10) {
+                    Image(systemName: "map")
+                        .font(.title2)
+                        .foregroundStyle(.secondary)
+                    Text("AeroRoute Preview")
+                        .font(.headline)
                 }
+                .padding(20)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -144,19 +114,24 @@ private struct FlightLegTable: View {
                 TableColumn("Flight") { row in
                     Text(row.flightNumber)
                 }
+                .width(72)
                 TableColumn("Callsign") { row in
                     Text(row.callsign)
                 }
+                .width(78)
                 TableColumn("Points") { row in
                     Text(row.pointCount.formatted())
                         .monospacedDigit()
                 }
+                .width(62)
                 TableColumn("From") { row in
                     Text(row.origin)
                 }
+                .width(48)
                 TableColumn("To") { row in
                     Text(row.destination)
                 }
+                .width(48)
                 TableColumn("Connection") { row in
                     Label(
                         row.connection,
@@ -166,6 +141,7 @@ private struct FlightLegTable: View {
                     )
                     .foregroundStyle(row.connects ? Color.secondary : Color.red)
                 }
+                .width(100)
             }
         }
         .accessibilityIdentifier("route.legTable")

@@ -14,9 +14,8 @@ struct AeroRouteApp: App {
             WorkspaceScene()
         }
 #if os(macOS)
-        .defaultSize(width: 1_440, height: 900)
+        .defaultSize(width: 1_000, height: 700)
         .windowToolbarStyle(.unified(showsTitle: true))
-        .windowResizability(.contentMinSize)
         .commands {
             AeroRouteCommands()
         }
@@ -30,7 +29,7 @@ private struct WorkspaceScene: View {
     var body: some View {
         ContentView(workspace: workspace)
 #if os(macOS)
-            .frame(minWidth: 900, minHeight: 620)
+            .frame(minWidth: 900, minHeight: 600)
             .focusedSceneValue(\.routeWorkspace, workspace)
 #endif
     }
@@ -66,20 +65,6 @@ private struct AeroRouteCommands: Commands {
             }
             .keyboardShortcut("r", modifiers: [.command, .shift])
             .disabled(workspace?.legs.isEmpty != false)
-
-            Divider()
-
-            Button("Move Leg Up") {
-                workspace?.moveSelectedLeg(by: -1)
-            }
-            .keyboardShortcut(.upArrow, modifiers: [.command, .option])
-            .disabled(workspace?.selectedLegID == nil)
-
-            Button("Move Leg Down") {
-                workspace?.moveSelectedLeg(by: 1)
-            }
-            .keyboardShortcut(.downArrow, modifiers: [.command, .option])
-            .disabled(workspace?.selectedLegID == nil)
 
             Divider()
 

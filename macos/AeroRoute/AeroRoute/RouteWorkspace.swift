@@ -97,6 +97,7 @@ final class RouteWorkspace: ObservableObject {
     private var exportTask: Task<Void, Never>?
     private var importTask: Task<Void, Never>?
     private let renderWorker = RenderWorker()
+    private let importWorker = ImportWorker()
     private var renderGeneration = 0
     private var exportGeneration = 0
     private var importGeneration = 0
@@ -189,27 +190,21 @@ final class RouteWorkspace: ObservableObject {
             var issues: [String] = []
             var importedAny = false
             var identities = Set(self.legs.map(\.sourceIdentity))
+            let worker = self.importWorker
 
             for source in candidates {
                 guard !Task.isCancelled else { break }
 
-                let accessed = source.startAccessingSecurityScopedResource()
-                let identity = Self.sourceIdentity(for: source)
-                if identities.contains(identity) {
-                    if accessed { source.stopAccessingSecurityScopedResource() }
-                    continue
-                }
-
-                let outcome = await Task.detached(priority: .userInitiated) {
-                    Self.loadImport(source)
-                }.value
-                if accessed { source.stopAccessingSecurityScopedResource() }
+                let outcome = await worker.load(
+                    source: source,
+                    knownIdentities: identities
+                )
 
                 guard !Task.isCancelled, generation == self.importGeneration else {
                     break
                 }
                 switch outcome {
-                case let .success(imported):
+                case let .success(imported, identity):
                     let item = FlightLegItem(
                         imported: imported,
                         sourceIdentity: identity
@@ -220,6 +215,10 @@ final class RouteWorkspace: ObservableObject {
                     importedAny = true
                 case let .failure(message):
                     issues.append("\(source.lastPathComponent): \(message)")
+                case .duplicate:
+                    continue
+                case .cancelled:
+                    break
                 }
             }
 
@@ -310,6 +309,11 @@ final class RouteWorkspace: ObservableObject {
         workspaceRevision += 1
         invalidateExport()
         let generation = renderGeneration
+
+        guard !isImporting else {
+            isRendering = false
+            return
+        }
 
         guard !legs.isEmpty else {
             previewSVG = nil
@@ -545,15 +549,18 @@ final class RouteWorkspace: ObservableObject {
         }
     }
 
-    nonisolated private static func loadImport(_ source: URL) -> ImportOutcome {
+    nonisolated fileprivate static func loadImport(
+        _ source: URL,
+        identity: String
+    ) -> ImportOutcome {
         do {
-            return .success(try loadFR24(source))
+            return .success(try loadFR24(source), identity)
         } catch {
             return .failure(message(for: error))
         }
     }
 
-    nonisolated private static func sourceIdentity(for source: URL) -> String {
+    nonisolated fileprivate static func sourceIdentity(for source: URL) -> String {
         if let values = try? source.resourceValues(forKeys: [.fileResourceIdentifierKey]),
            let identifier = values.fileResourceIdentifier {
             return String(describing: identifier)
@@ -571,8 +578,10 @@ final class RouteWorkspace: ObservableObject {
 }
 
 private enum ImportOutcome: Sendable {
-    case success(ImportedLeg)
+    case success(ImportedLeg, String)
+    case duplicate
     case failure(String)
+    case cancelled
 }
 
 private enum RenderOutcome: Sendable {
@@ -595,6 +604,21 @@ private actor RenderWorker {
             options: options,
             style: style
         )
+        return Task.isCancelled ? .cancelled : outcome
+    }
+}
+
+private actor ImportWorker {
+    func load(source: URL, knownIdentities: Set<String>) -> ImportOutcome {
+        guard !Task.isCancelled else { return .cancelled }
+        let accessed = source.startAccessingSecurityScopedResource()
+        defer {
+            if accessed { source.stopAccessingSecurityScopedResource() }
+        }
+
+        let identity = RouteWorkspace.sourceIdentity(for: source)
+        guard !knownIdentities.contains(identity) else { return .duplicate }
+        let outcome = RouteWorkspace.loadImport(source, identity: identity)
         return Task.isCancelled ? .cancelled : outcome
     }
 }

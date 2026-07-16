@@ -12,55 +12,16 @@ struct ContentView: View {
     @ObservedObject var workspace: RouteWorkspace
 
     var body: some View {
-        NavigationSplitView {
-            RouteSidebar(workspace: workspace)
-        } detail: {
-            RouteDetailView(workspace: workspace)
-        }
-        .navigationSplitViewStyle(.balanced)
-        .inspector(isPresented: $workspace.isInspectorPresented) {
-            RouteInspector(workspace: workspace)
-        }
+        workspaceView
         .toolbarRole(.editor)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
-                Button {
-                    workspace.isImporterPresented = true
-                } label: {
-                    Label("Import CSV", systemImage: "square.and.arrow.down")
-                }
-                .help("Import Flightradar24 CSV")
-                .keyboardShortcut("o", modifiers: .command)
-
-#if os(macOS)
-                ControlGroup {
-                    Button {
-                        workspace.moveSelectedLeg(by: -1)
-                    } label: {
-                        Label("Move Up", systemImage: "arrow.up")
-                    }
-                    Button {
-                        workspace.moveSelectedLeg(by: 1)
-                    } label: {
-                        Label("Move Down", systemImage: "arrow.down")
-                    }
-                }
-                .labelStyle(.iconOnly)
-#endif
-
                 Button {
                     workspace.validateNow()
                 } label: {
                     Label("Validate", systemImage: "checkmark.circle")
                 }
                 .disabled(workspace.legs.isEmpty)
-
-                Button {
-                    workspace.isInspectorPresented.toggle()
-                } label: {
-                    Label("Inspector", systemImage: "info.circle")
-                }
-                .help("Show or hide inspector")
 
                 Button {
                     workspace.prepareExport()
@@ -71,6 +32,13 @@ struct ContentView: View {
                 .help("Export deterministic SVG")
                 .keyboardShortcut("s", modifiers: [.command, .shift])
                 .accessibilityIdentifier("route.export")
+
+                Button {
+                    workspace.isInspectorPresented.toggle()
+                } label: {
+                    Label("Inspector", systemImage: "sidebar.right")
+                }
+                .help("Show or hide inspector")
             }
         }
         .fileImporter(
@@ -106,6 +74,27 @@ struct ContentView: View {
         .task {
             workspace.loadCommandLineArgumentsIfNeeded()
         }
+    }
+
+    @ViewBuilder
+    private var workspaceView: some View {
+#if os(macOS)
+        MacWorkspaceSplitView(
+            workspace: workspace,
+            isInspectorPresented: $workspace.isInspectorPresented
+        )
+        .ignoresSafeArea(.container, edges: [.top, .bottom])
+#else
+        NavigationSplitView {
+            RouteSidebar(workspace: workspace)
+        } detail: {
+            RouteDetailView(workspace: workspace)
+                .inspector(isPresented: $workspace.isInspectorPresented) {
+                    RouteInspector(workspace: workspace)
+                }
+        }
+        .navigationSplitViewStyle(.balanced)
+#endif
     }
 }
 

@@ -1,4 +1,8 @@
 import AeroRouteCore
+#if os(macOS)
+import AppKit
+import SwiftUI
+#endif
 import XCTest
 @testable import AeroRoute
 
@@ -24,6 +28,21 @@ final class AeroRouteTests: XCTestCase {
         XCTAssertTrue(workspace.connectionDistances.allSatisfy { $0 <= 50 })
         XCTAssertTrue(workspace.previewSVG?.contains("KEF · Keflavik") == true)
         XCTAssertTrue(workspace.canExport)
+
+        workspace.prepareExport()
+        try await waitForIdle(workspace)
+
+        let exportData = try XCTUnwrap(workspace.exportDocument?.data)
+        let exportSVG = try XCTUnwrap(String(data: exportData, encoding: .utf8))
+        XCTAssertTrue(workspace.isExporterPresented)
+        XCTAssertTrue(exportSVG.contains("width=\"16000\""))
+        XCTAssertTrue(exportSVG.contains("KEF–CPH–ZRH–PVG"))
+
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AeroRoute-\(UUID().uuidString).svg")
+        defer { try? FileManager.default.removeItem(at: output) }
+        try exportData.write(to: output, options: .atomic)
+        XCTAssertEqual(try Data(contentsOf: output), exportData)
     }
 
     @MainActor
@@ -45,14 +64,156 @@ final class AeroRouteTests: XCTestCase {
     }
 
     @MainActor
+    func testDuplicateFilesAreIgnoredWithoutReordering() async throws {
+        let workspace = RouteWorkspace()
+        let source = example("sk2596.csv")
+        workspace.importURLs([source, source])
+
+        try await waitForIdle(workspace)
+
+        XCTAssertEqual(workspace.legs.map(\.flightNumber), ["SK2596"])
+        XCTAssertFalse(workspace.isAlertPresented)
+    }
+
+    @MainActor
+    func testClearCancelsAnImportBeforeAReplacementImport() async throws {
+        let workspace = RouteWorkspace()
+        workspace.importURLs([example("lx188.csv")])
+        workspace.clear()
+        workspace.importURLs([example("sk2596.csv")])
+
+        try await waitForIdle(workspace)
+
+        XCTAssertEqual(workspace.legs.map(\.flightNumber), ["SK2596"])
+        XCTAssertFalse(workspace.isImporting)
+        XCTAssertFalse(workspace.isRendering)
+    }
+
+    @MainActor
+    func testAWorkspaceChangeInvalidatesPendingExport() async throws {
+        let workspace = RouteWorkspace()
+        workspace.importURLs([example("sk2596.csv")])
+        try await waitForIdle(workspace)
+        XCTAssertTrue(workspace.canExport)
+
+        workspace.prepareExport()
+        XCTAssertTrue(workspace.isExporting)
+
+        workspace.settings.title = "Updated title"
+        workspace.scheduleRender()
+        try await waitForIdle(workspace)
+
+        XCTAssertFalse(workspace.isExporting)
+        XCTAssertFalse(workspace.isExporterPresented)
+        XCTAssertNil(workspace.exportDocument)
+        XCTAssertTrue(workspace.previewSVG?.contains("Updated title") == true)
+    }
+
+    @MainActor
+    func testClearResetsAnActiveRender() async throws {
+        let workspace = RouteWorkspace()
+        workspace.importURLs([example("sk2596.csv")])
+        try await waitForIdle(workspace)
+
+        workspace.settings.title = "Rendering"
+        workspace.scheduleRender()
+        XCTAssertTrue(workspace.isRendering)
+
+        workspace.clear()
+
+        XCTAssertTrue(workspace.legs.isEmpty)
+        XCTAssertFalse(workspace.isImporting)
+        XCTAssertFalse(workspace.isRendering)
+        XCTAssertFalse(workspace.isExporting)
+        XCTAssertNil(workspace.previewSVG)
+        XCTAssertEqual(workspace.statusMessage, "No files imported")
+    }
+
+#if os(macOS)
+    @MainActor
+    func testRouteDetailDoesNotClaimAnOversizedFittingWidth() {
+        let hostingView = NSHostingView(rootView: RouteDetailView(workspace: RouteWorkspace()))
+        let fittingWidth = hostingView.fittingSize.width
+
+        XCTAssertLessThan(
+            fittingWidth,
+            520,
+            "RouteDetailView claims \(fittingWidth) pt and forces split-view sidebars to collapse"
+        )
+    }
+
+    @MainActor
+    func testMacWorkspaceUsesBoundedNativeSplitItems() {
+        let controller = MacWorkspaceSplitViewController(workspace: RouteWorkspace())
+        controller.loadViewIfNeeded()
+
+        XCTAssertEqual(controller.splitViewItems.count, 3)
+        XCTAssertEqual(controller.sidebarItem.minimumThickness, 220)
+        XCTAssertEqual(controller.sidebarItem.maximumThickness, 280)
+        XCTAssertEqual(controller.contentItem.minimumThickness, 320)
+        XCTAssertEqual(controller.inspectorItem.minimumThickness, 280)
+        XCTAssertEqual(controller.inspectorItem.maximumThickness, 360)
+        XCTAssertFalse(controller.sidebarItem.canCollapse)
+        XCTAssertFalse(controller.sidebarItem.isCollapsed)
+    }
+
+    @MainActor
+    func testSVGPreviewRasterizesVisiblePixelsInProcess() async throws {
+        let workspace = RouteWorkspace()
+        workspace.importURLs([example("sq22.csv")])
+        try await waitForIdle(workspace)
+
+        let svg = try XCTUnwrap(workspace.previewSVG)
+        let image = try XCTUnwrap(macOSSVGPreviewImage(from: svg))
+        XCTAssertEqual(image.size, NSSize(width: 1_600, height: 1_000))
+
+        let bitmap = try XCTUnwrap(
+            NSBitmapImageRep(
+                bitmapDataPlanes: nil,
+                pixelsWide: 160,
+                pixelsHigh: 100,
+                bitsPerSample: 8,
+                samplesPerPixel: 4,
+                hasAlpha: true,
+                isPlanar: false,
+                colorSpaceName: .deviceRGB,
+                bytesPerRow: 0,
+                bitsPerPixel: 0
+            )
+        )
+        NSGraphicsContext.saveGraphicsState()
+        defer { NSGraphicsContext.restoreGraphicsState() }
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
+        image.draw(in: NSRect(x: 0, y: 0, width: 160, height: 100))
+
+        var visibleSampleCount = 0
+        for y in stride(from: 0, to: 100, by: 5) {
+            for x in stride(from: 0, to: 160, by: 5) {
+                guard let color = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB) else {
+                    continue
+                }
+                if color.alphaComponent > 0.01
+                    && (color.redComponent < 0.98
+                        || color.greenComponent < 0.98
+                        || color.blueComponent < 0.98)
+                {
+                    visibleSampleCount += 1
+                }
+            }
+        }
+        XCTAssertGreaterThan(visibleSampleCount, 100)
+    }
+#endif
+
+    @MainActor
     private func waitForIdle(_ workspace: RouteWorkspace) async throws {
         for _ in 0..<600 {
-            if !workspace.isImporting && !workspace.isRendering {
+            if !workspace.isImporting && !workspace.isRendering && !workspace.isExporting {
                 return
             }
             try await Task.sleep(nanoseconds: 50_000_000)
         }
-        XCTFail("import or rendering did not finish within 30 seconds")
+        XCTFail("workspace did not become idle within 30 seconds")
     }
 
     private func example(_ name: String) -> URL {

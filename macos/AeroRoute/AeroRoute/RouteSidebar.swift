@@ -15,19 +15,21 @@ struct RouteSidebar: View {
                 .onDelete(perform: workspace.removeLegs)
             }
         }
-        .navigationTitle("Flight Legs")
-        .navigationSplitViewColumnWidth(min: 260, ideal: 280, max: 360)
         .overlay {
             if workspace.legs.isEmpty {
-                ContentUnavailableView {
-                    Label("No Flight Legs", systemImage: "airplane")
-                } description: {
-                    Text("Import or drop Flightradar24 CSV files in itinerary order.")
-                } actions: {
-                    Button("Import CSV…") {
-                        workspace.isImporterPresented = true
-                    }
+                VStack(spacing: 10) {
+                    Image(systemName: "airplane")
+                        .font(.title2)
+                        .foregroundStyle(.tertiary)
+                    Text("No Flight Legs")
+                        .font(.headline)
+                    Text("Import or drop CSV files in itinerary order.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
                 }
+                .padding(16)
+                .frame(maxWidth: .infinity)
             }
         }
         .dropDestination(for: URL.self) { urls, _ in
@@ -53,23 +55,6 @@ struct RouteSidebar: View {
                     .help("Remove selected flight leg")
                 }
                 .labelStyle(.iconOnly)
-
-                Menu {
-                    Button("Move Up", systemImage: "arrow.up") {
-                        workspace.moveSelectedLeg(by: -1)
-                    }
-                    Button("Move Down", systemImage: "arrow.down") {
-                        workspace.moveSelectedLeg(by: 1)
-                    }
-                    Divider()
-                    Button("Clear All", systemImage: "trash", role: .destructive) {
-                        workspace.clear()
-                    }
-                    .disabled(workspace.legs.isEmpty)
-                } label: {
-                    Label("Flight leg actions", systemImage: "ellipsis")
-                }
-                .fixedSize()
 
                 Spacer()
             }

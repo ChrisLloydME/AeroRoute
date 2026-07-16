@@ -1,18 +1,45 @@
 import SwiftUI
+#if os(macOS)
+import AppKit
+#else
 import WebKit
+#endif
 
 struct SVGPreview: View {
     let svg: String
     let aspectRatio: Double
 
     var body: some View {
-        SVGWebView(svg: svg)
-            .aspectRatio(aspectRatio, contentMode: .fit)
-            .accessibilityLabel("Rendered flight map preview")
-            .accessibilityIdentifier("route.preview")
+        Group {
+#if os(macOS)
+            NativeSVGImage(svg: svg)
+#else
+            SVGWebView(svg: svg)
+                .aspectRatio(aspectRatio, contentMode: .fit)
+#endif
+        }
+        .accessibilityLabel("Rendered flight map preview")
+        .accessibilityIdentifier("route.preview")
     }
 }
 
+#if os(macOS)
+func macOSSVGPreviewImage(from svg: String) -> NSImage? {
+    NSImage(data: Data(svg.utf8))
+}
+
+private struct NativeSVGImage: View {
+    let svg: String
+
+    var body: some View {
+        if let image = macOSSVGPreviewImage(from: svg) {
+            Image(nsImage: image)
+                .resizable()
+                .scaledToFit()
+        }
+    }
+}
+#else
 private func previewHTML(for svg: String) -> String {
     """
     <!doctype html>
@@ -30,31 +57,6 @@ private func previewHTML(for svg: String) -> String {
     """
 }
 
-#if os(macOS)
-private struct SVGWebView: NSViewRepresentable {
-    let svg: String
-
-    func makeCoordinator() -> Coordinator { Coordinator() }
-
-    func makeNSView(context: Context) -> WKWebView {
-        let configuration = WKWebViewConfiguration()
-        configuration.defaultWebpagePreferences.allowsContentJavaScript = false
-        let webView = WKWebView(frame: .zero, configuration: configuration)
-        webView.allowsMagnification = true
-        return webView
-    }
-
-    func updateNSView(_ webView: WKWebView, context: Context) {
-        guard context.coordinator.svg != svg else { return }
-        context.coordinator.svg = svg
-        webView.loadHTMLString(previewHTML(for: svg), baseURL: nil)
-    }
-
-    final class Coordinator {
-        var svg = ""
-    }
-}
-#else
 private struct SVGWebView: UIViewRepresentable {
     let svg: String
 

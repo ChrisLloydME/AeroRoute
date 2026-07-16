@@ -60,7 +60,6 @@ struct RouteInspector: View {
             }
         }
         .formStyle(.grouped)
-        .inspectorColumnWidth(min: 280, ideal: 310, max: 380)
         .accessibilityIdentifier("route.inspector")
     }
 
@@ -71,8 +70,16 @@ struct RouteInspector: View {
     ) -> some View {
         Stepper(value: value, in: range) {
             LabeledContent(title) {
-                Text(value.wrappedValue.formatted())
+                TextField(
+                    title,
+                    value: clamped(value, to: range),
+                    format: .number.grouping(.automatic)
+                )
+                    .labelsHidden()
+                    .textFieldStyle(.plain)
+                    .multilineTextAlignment(.trailing)
                     .monospacedDigit()
+                    .frame(width: 84)
             }
         }
     }
@@ -86,10 +93,32 @@ struct RouteInspector: View {
     ) -> some View {
         Stepper(value: value, in: range, step: step) {
             LabeledContent(title) {
-                Text(value.wrappedValue.formatted(.number.precision(.fractionLength(1))) + suffix)
-                    .monospacedDigit()
+                HStack(spacing: 2) {
+                    TextField(
+                        title,
+                        value: clamped(value, to: range),
+                        format: .number.precision(.fractionLength(1))
+                    )
+                        .labelsHidden()
+                        .textFieldStyle(.plain)
+                        .multilineTextAlignment(.trailing)
+                        .monospacedDigit()
+                        .frame(width: 66)
+                    Text(suffix)
+                }
+                .frame(width: 84, alignment: .trailing)
             }
         }
+    }
+
+    private func clamped<T: Comparable>(
+        _ value: Binding<T>,
+        to range: ClosedRange<T>
+    ) -> Binding<T> {
+        Binding(
+            get: { value.wrappedValue },
+            set: { value.wrappedValue = min(max($0, range.lowerBound), range.upperBound) }
+        )
     }
 
     private func colorPicker(
