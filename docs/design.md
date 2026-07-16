@@ -1,64 +1,82 @@
-# AeroRoute for macOS
+# AeroRoute native product architecture
 
-## 1. Product context
+## Product model
 
-AeroRoute turns one or more standard Flightradar24 CSV exports into a static,
-editable SVG flight record. The desktop app is an offline batch utility rather
-than a map browser. Its primary loop is import, order, inspect, label, preview,
-and export.
+AeroRoute is an offline document-style utility: import ordered flight tracks,
+review continuity, edit presentation settings, preview the exact renderer, and
+export SVG. It is not a live map browser and has no account, network, telemetry,
+or background-service layer.
 
-## 2. Product direction
+## Shared core
 
-The interface should feel like a restrained native aviation archive tool. It
-uses three stable regions: an ordered flight-leg queue, a large live map
-preview, and a compact export inspector. The map remains the visual focus.
+`AeroRouteCore` is the only implementation of the data pipeline used by the
+macOS, iPhone, and iPad app:
 
-## 3. Information architecture
+- `RFC4180CSV` preserves quoting, embedded newlines, optional blanks, and stable
+  row semantics from the fixed input contract.
+- `FR24` validates coordinates, sorts timestamps stably, and derives filename
+  metadata.
+- `Geometry` and `GeoJSON` provide the fixed equirectangular projection,
+  antimeridian continuity, endpoint distance, itinerary merging, and bundled
+  Natural Earth geometry.
+- `SVGRenderer` and `XMLNode` preserve the reviewed SVG structure, layer order,
+  numeric formatting, paths, labels, colors, canvas, and scale semantics.
 
-- Left: imported CSV legs, drag ordering, add/remove controls, validation state.
-- Center: live SVG preview using the same renderer as final export.
-- Right: itinerary labels, visibility options, size, line weight, and colors.
-- Bottom: point count, continuity status, and export action.
+The package has no dependency on SwiftUI or an application lifecycle.
 
-## 4. Interaction model
+## Application state and concurrency
 
-CSV files may be dropped anywhere on the window or selected with a file dialog.
-Multi-leg files are connected only in their displayed order. Reordering updates
-the preview and endpoint-distance validation immediately. Export is disabled
-when parsing fails or adjacent endpoints are too far apart.
+Each window owns one `RouteWorkspace`; windows do not share imported legs,
+settings, file panels, or background tasks. CSV reading is serialized off the
+main actor while security-scoped access covers identity lookup and file reads.
+Preview and export rendering share a serial worker so rapid edits cannot create
+overlapping full-map renders.
 
-## 5. Visual system
+Workspace revisions make rendering latest-wins. Editing settings, reordering,
+removing, or clearing legs cancels and invalidates an older export snapshot, so
+the save panel cannot silently present SVG from stale state. Clearing also
+resets import, render, export, preview, validation, and selection state.
 
-The app uses Qt Widgets with the native macOS style and system palette. Only
-typographic hierarchy and map color swatches are customized, so controls follow
-the current macOS light or dark appearance automatically. The map palette
-follows the existing artwork: ocean `#B2BAC3`, land `#D9D9D9`, coastline
-`#787C80`, borders `#A9ADB2`, route `#183143`, marker `#E05B45`, and primary
-text `#171D21`. No gradients, ornamental cards, or decorative iconography are
-used.
+## Native interaction model
 
-## 6. Typography
+The interface is built from SwiftUI and Apple frameworks:
 
-Interface typography uses the macOS system sans family. Labels and helper copy
-are compact, with clear hierarchy from weight and spacing. Exported artwork
-continues to use Helvetica Neue fallbacks so SVG files remain portable.
+- `NavigationSplitView`, `List`, and native selection/reordering for flight
+  legs.
+- A native `Table` for continuity review on wider layouts and a touch-friendly
+  list on compact iPhone layouts.
+- Standard toolbar commands, menus, shortcuts, drag and drop, `fileImporter`,
+  and `fileExporter`.
+- A grouped inspector `Form` using `TextField`, `Toggle`, `Stepper`, and
+  `ColorPicker`.
+- AppKit decodes SVG into `NSImage` for the macOS preview. iPhone and iPad use
+  WebKit with JavaScript disabled as their system SVG preview surface. Neither
+  path is a web application shell or duplicates rendering logic.
 
-## 7. States and validation
+SwiftUI supplies the current operating system's materials, typography,
+appearance, focus, safe areas, accessibility semantics, and adaptive behavior.
+The app does not manually imitate a newer macOS visual style.
 
-Each leg exposes loading, ready, and invalid states. Adjacent endpoint distance
-is reported in kilometres. A 50 km default tolerance accommodates airport
-surface sampling while preventing unrelated flights from being silently joined.
-An empty state explains the accepted FR24 workflow without blocking file drop.
+## Platform adaptation
 
-## 8. Accessibility and resilience
+macOS presents an editor window with sidebar, resizable preview/table detail,
+inspector, menus, keyboard shortcuts, pointer-friendly controls, file panels,
+and file drop. iPad uses the same multi-column information architecture when
+space permits. Compact iPhone layouts switch between the map and leg review via
+a native segmented picker; the inspector adapts to a system presentation.
 
-All actions have text labels and keyboard focus. Status is communicated with
-copy as well as color. Parsing and rendering run from the canonical pipeline,
-so CLI and app output remain equivalent. The app is offline and writes SVG only.
+The shared Xcode target declares iPhone and iPad device families. iOS and
+iPadOS use the same core capabilities rather than placeholder or compile-only
+implementations.
 
-## 9. Packaging
+## Compatibility and packaging
 
-PyInstaller bundles Python, PySide6, Qt SVG support, and Natural Earth map data
-into a standalone macOS application. The build skips signing and notarization
-as requested. Build scripts support arm64, x86_64, and universal2 targets when
-the local Python and native dependencies contain the requested slices.
+Nine immutable Python-generated SVG fixtures lock the historical output. Swift
+tests compare every result byte-for-byte and separately cover parsing,
+metadata, geometry, continuity, GeoJSON, layer composition, serialization, and
+file writing.
+
+The product consists of the Xcode application and `AeroRouteCore`. It neither
+invokes nor embeds Python, PySide6, Qt, or PyInstaller. The archived Python tree
+under `compatibility/python-reference` exists only to preserve provenance and
+is not referenced by the Xcode project or Swift package.

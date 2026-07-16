@@ -1,21 +1,18 @@
 # Examples
 
-Example filenames use lowercase flight numbers without provider download IDs:
+`data/` contains seven fixed Flightradar24 CSV tracks used by the Swift contract
+tests. Filenames use lowercase flight numbers without provider download IDs:
 
 ```text
 data/lx188.csv
 output/flight-lx188.svg
 ```
 
-`data/` contains six Flightradar24 CSV tracks used by the test suite and the
-commands in the main README. `output/` contains representative SVG maps,
-including single-flight and multi-leg renders.
+`output/` contains nine representative SVGs: seven single-flight maps and two
+multi-leg itineraries. These files are exact copies of the immutable reviewed
+fixtures in `compatibility/golden/python`; update neither location merely to
+make a compatibility test pass.
 
-Render an example from the repository root:
-
-```bash
-python3 -m aeroroute examples/data/lx188.csv --output lx188.svg
-```
-
-Generated applications and release archives are not examples. The macOS build
-places those artifacts in the ignored `dist/` directory.
+To inspect an example in the native app, open the Xcode project, run the shared
+`AeroRoute` scheme, and import one or more CSV files from `data/` in itinerary
+order.
