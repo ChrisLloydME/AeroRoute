@@ -83,7 +83,7 @@ struct ContentView: View {
             workspace: workspace,
             isInspectorPresented: $workspace.isInspectorPresented
         )
-        .ignoresSafeArea(.container, edges: [.top, .bottom])
+        .ignoresSafeArea(.container, edges: .top)
 #else
         NavigationSplitView {
             RouteSidebar(workspace: workspace)

@@ -73,12 +73,23 @@ final class MacWorkspaceSplitViewController: NSSplitViewController {
         addSplitViewItem(sidebarItem)
         addSplitViewItem(contentItem)
         addSplitViewItem(inspectorItem)
+        configureLiveResizeRedraw()
     }
 
     func setInspectorPresented(_ isPresented: Bool) {
         loadViewIfNeeded()
         guard inspectorItem.isCollapsed == isPresented else { return }
         inspectorItem.isCollapsed = !isPresented
+    }
+
+    private func configureLiveResizeRedraw() {
+        let paneViews = splitViewItems.flatMap { item in
+            [item.viewController.view, item.viewController.view.superview].compactMap { $0 }
+        }
+        for view in [self.view, splitView] + paneViews {
+            view.wantsLayer = true
+            view.layerContentsRedrawPolicy = .duringViewResize
+        }
     }
 
 }
