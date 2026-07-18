@@ -10,11 +10,11 @@ struct RouteDetailView: View {
     var body: some View {
         Group {
 #if os(macOS)
-            VSplitView {
+            VStack(spacing: 0) {
                 RouteMapPane(workspace: workspace)
-                    .frame(minHeight: 380)
-                FlightLegTable(workspace: workspace)
-                    .frame(minHeight: 170, idealHeight: 230)
+                Divider()
+                FlightLegList(workspace: workspace)
+                    .frame(minHeight: 160, idealHeight: 220, maxHeight: 280)
             }
 #else
             if horizontalSizeClass == .compact {
@@ -40,7 +40,7 @@ struct RouteDetailView: View {
                     RouteMapPane(workspace: workspace)
                         .frame(minHeight: 360)
                     Divider()
-                    FlightLegTable(workspace: workspace)
+                    FlightLegList(workspace: workspace)
                         .frame(minHeight: 220)
                 }
             }
@@ -100,7 +100,7 @@ private struct RouteMapPane: View {
     }
 }
 
-private struct FlightLegTable: View {
+private struct FlightLegList: View {
     @ObservedObject var workspace: RouteWorkspace
 
     var body: some View {
@@ -110,29 +110,42 @@ private struct FlightLegTable: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
 
-            Table(workspace.legSummaries, selection: $workspace.selectedLegID) {
-                TableColumn("Flight") { row in
-                    Text(row.flightNumber)
-                }
-                .width(72)
-                TableColumn("Callsign") { row in
-                    Text(row.callsign)
-                }
-                .width(78)
-                TableColumn("Points") { row in
+            HStack(spacing: 12) {
+                Text("Flight")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text("Route")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text("Points")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text("Connection")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 5)
+
+            Divider()
+
+            List(workspace.legSummaries, selection: $workspace.selectedLegID) { row in
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(row.flightNumber)
+                        Text(row.callsign)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Text("\(row.origin) → \(row.destination)")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
                     Text(row.pointCount.formatted())
                         .monospacedDigit()
-                }
-                .width(62)
-                TableColumn("From") { row in
-                    Text(row.origin)
-                }
-                .width(48)
-                TableColumn("To") { row in
-                    Text(row.destination)
-                }
-                .width(48)
-                TableColumn("Connection") { row in
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
                     Label(
                         row.connection,
                         systemImage: row.connects
@@ -140,8 +153,11 @@ private struct FlightLegTable: View {
                             : "exclamationmark.triangle"
                     )
                     .foregroundStyle(row.connects ? Color.secondary : Color.red)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .width(100)
+                .lineLimit(1)
+                .tag(row.id)
+                .accessibilityElement(children: .combine)
             }
         }
         .accessibilityIdentifier("route.legTable")

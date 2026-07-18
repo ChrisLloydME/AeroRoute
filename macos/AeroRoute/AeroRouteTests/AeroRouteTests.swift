@@ -137,35 +137,13 @@ final class AeroRouteTests: XCTestCase {
 
         XCTAssertLessThan(
             fittingWidth,
-            520,
+            380,
             "RouteDetailView claims \(fittingWidth) pt and forces split-view sidebars to collapse"
         )
     }
 
     @MainActor
-    func testMacWorkspaceUsesBoundedNativeSplitItems() {
-        let controller = MacWorkspaceSplitViewController(workspace: RouteWorkspace())
-        controller.loadViewIfNeeded()
-
-        XCTAssertEqual(controller.splitViewItems.count, 3)
-        XCTAssertEqual(controller.sidebarItem.minimumThickness, 220)
-        XCTAssertEqual(controller.sidebarItem.maximumThickness, 280)
-        XCTAssertEqual(controller.contentItem.minimumThickness, 320)
-        XCTAssertEqual(controller.inspectorItem.minimumThickness, 280)
-        XCTAssertEqual(controller.inspectorItem.maximumThickness, 360)
-        XCTAssertFalse(controller.sidebarItem.canCollapse)
-        XCTAssertFalse(controller.sidebarItem.isCollapsed)
-        XCTAssertEqual(controller.splitView.layerContentsRedrawPolicy, .duringViewResize)
-        for item in controller.splitViewItems {
-            XCTAssertEqual(
-                item.viewController.view.layerContentsRedrawPolicy,
-                .duringViewResize
-            )
-        }
-    }
-
-    @MainActor
-    func testWorkspaceSplitFillsBottomEdgeAfterWindowResizes() {
+    func testWorkspaceUsesTheSystemSplitViewWithoutAnAppKitBridge() {
         let hostingController = NSHostingController(
             rootView: ContentView(workspace: RouteWorkspace())
         )
@@ -190,6 +168,25 @@ final class AeroRouteTests: XCTestCase {
                 return XCTFail("No vertical workspace NSSplitView after resizing to \(size)")
             }
 
+            let visiblePaneWidths = verticalSplitViews.flatMap { splitView in
+                splitView.subviews
+                    .filter { !$0.isHidden && $0.bounds.width >= 100 }
+                    .map(\.bounds.width)
+            }
+            XCTAssertGreaterThanOrEqual(
+                visiblePaneWidths.min() ?? 0,
+                195,
+                "A native side column collapsed below its usable width at \(size): \(visiblePaneWidths)"
+            )
+
+            let responderTypeNames = responderChain(from: workspaceSplit).map {
+                String(reflecting: type(of: $0))
+            }
+            XCTAssertFalse(
+                responderTypeNames.contains { $0.contains("MacWorkspaceSplitViewController") },
+                "The workspace must not insert an AppKit split controller inside SwiftUI"
+            )
+
             let splitFrame = workspaceSplit.convert(workspaceSplit.bounds, to: hostingController.view)
             let bottomGap = splitFrame.minY - hostingController.view.bounds.minY
             XCTAssertLessThanOrEqual(
@@ -197,24 +194,6 @@ final class AeroRouteTests: XCTestCase {
                 1,
                 "Workspace leaves a \(bottomGap) pt bottom gap after resizing to \(size)"
             )
-
-            let splitController = responderChain(from: workspaceSplit)
-                .compactMap { $0 as? MacWorkspaceSplitViewController }
-                .first
-            XCTAssertNotNil(splitController, "No MacWorkspaceSplitViewController after resizing")
-            if let splitController {
-                for item in splitController.splitViewItems {
-                    let paneView = item.viewController.view
-                    guard let wrapper = paneView.superview else { continue }
-                    let paneFrame = paneView.convert(paneView.bounds, to: wrapper)
-                    let paneBottomGap = paneFrame.minY - wrapper.bounds.minY
-                    XCTAssertLessThanOrEqual(
-                        abs(paneBottomGap),
-                        1,
-                        "Pane leaves a \(paneBottomGap) pt bottom gap after resizing to \(size)"
-                    )
-                }
-            }
         }
     }
 

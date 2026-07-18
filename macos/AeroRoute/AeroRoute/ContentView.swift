@@ -79,11 +79,18 @@ struct ContentView: View {
     @ViewBuilder
     private var workspaceView: some View {
 #if os(macOS)
-        MacWorkspaceSplitView(
-            workspace: workspace,
-            isInspectorPresented: $workspace.isInspectorPresented
-        )
-        .ignoresSafeArea(.container, edges: .top)
+        NavigationSplitView(columnVisibility: .constant(.all)) {
+            RouteSidebar(workspace: workspace)
+                .toolbar(removing: .sidebarToggle)
+                .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 260)
+        } detail: {
+            RouteDetailView(workspace: workspace)
+                .inspector(isPresented: $workspace.isInspectorPresented) {
+                    RouteInspector(workspace: workspace)
+                        .inspectorColumnWidth(min: 260, ideal: 300, max: 340)
+                }
+        }
+        .navigationSplitViewStyle(.balanced)
 #else
         NavigationSplitView {
             RouteSidebar(workspace: workspace)

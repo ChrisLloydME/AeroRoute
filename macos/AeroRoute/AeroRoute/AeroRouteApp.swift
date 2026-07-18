@@ -29,7 +29,6 @@ private struct WorkspaceScene: View {
     var body: some View {
         ContentView(workspace: workspace)
 #if os(macOS)
-            .frame(minWidth: 900, minHeight: 600)
             .focusedSceneValue(\.routeWorkspace, workspace)
 #endif
     }

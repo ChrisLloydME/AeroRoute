@@ -32,11 +32,31 @@ private struct NativeSVGImage: View {
     let svg: String
 
     var body: some View {
-        if let image = macOSSVGPreviewImage(from: svg) {
-            Image(nsImage: image)
-                .resizable()
-                .scaledToFit()
-        }
+        FlexibleSVGImageView(image: macOSSVGPreviewImage(from: svg))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+private struct FlexibleSVGImageView: NSViewRepresentable {
+    let image: NSImage?
+
+    func makeNSView(context: Context) -> NSImageView {
+        let imageView = FlexibleNSImageView()
+        imageView.imageScaling = .scaleProportionallyUpOrDown
+        imageView.imageAlignment = .alignCenter
+        imageView.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        imageView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return imageView
+    }
+
+    func updateNSView(_ imageView: NSImageView, context: Context) {
+        imageView.image = image
+    }
+}
+
+private final class FlexibleNSImageView: NSImageView {
+    override var intrinsicContentSize: NSSize {
+        .zero
     }
 }
 #else
