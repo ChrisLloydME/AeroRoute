@@ -26,14 +26,24 @@ struct ContentView: View {
                 }
                 .disabled(workspace.legs.isEmpty)
 
-                Button {
-                    workspace.prepareExport()
+                Menu {
+                    Button {
+                        workspace.prepareExport()
+                    } label: {
+                        Label("Export to Files (SVG)", systemImage: "folder")
+                    }
+                    .keyboardShortcut("s", modifiers: [.command, .shift])
+
+                    Button {
+                        workspace.preparePhotoExport()
+                    } label: {
+                        Label("Save to Photos (PNG)", systemImage: "photo")
+                    }
                 } label: {
-                    Label("Export SVG", systemImage: "square.and.arrow.up")
+                    Label("Export", systemImage: "square.and.arrow.up")
                 }
                 .disabled(!workspace.canExport)
-                .help("Export deterministic SVG")
-                .keyboardShortcut("s", modifiers: [.command, .shift])
+                .help("Export SVG to Files or PNG to Photos")
                 .accessibilityIdentifier("route.export")
 
                 Button {

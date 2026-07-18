@@ -7,6 +7,18 @@ import XCTest
 @testable import AeroRoute
 
 final class AeroRouteTests: XCTestCase {
+    func testSVGCanBeRasterizedAsPNG() throws {
+        let svg = """
+        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="20" viewBox="0 0 32 20">
+          <rect width="32" height="20" fill="#183143"/>
+        </svg>
+        """
+
+        let data = try rasterizedPNGData(from: svg)
+
+        XCTAssertEqual(Array(data.prefix(8)), [137, 80, 78, 71, 13, 10, 26, 10])
+    }
+
     @MainActor
     func testExampleItineraryRendersAndCanExport() async throws {
         let workspace = RouteWorkspace()

@@ -67,10 +67,15 @@ private struct AeroRouteCommands: Commands {
 
             Divider()
 
-            Button("Export SVG…") {
+            Button("Export to Files (SVG)…") {
                 workspace?.prepareExport()
             }
             .keyboardShortcut("s", modifiers: [.command, .shift])
+            .disabled(workspace?.canExport != true)
+
+            Button("Save to Photos (PNG)") {
+                workspace?.preparePhotoExport()
+            }
             .disabled(workspace?.canExport != true)
         }
     }

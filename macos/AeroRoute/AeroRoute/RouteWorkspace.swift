@@ -412,6 +412,71 @@ final class RouteWorkspace: ObservableObject {
         }
     }
 
+    func preparePhotoExport() {
+        guard !legs.isEmpty else { return }
+        exportTask?.cancel()
+        exportGeneration += 1
+        let generation = exportGeneration
+        let revision = workspaceRevision
+        let tracks = legs.map(\.imported.track)
+        let options = renderOptions(preview: false)
+        let style = mapStyle
+        let sourceName = documentTitle
+        let filename = suggestedFilename
+        let worker = renderWorker
+        exportDocument = nil
+        isExporting = true
+        statusMessage = "Preparing PNG…"
+
+        exportTask = Task { [weak self] in
+            let outcome = await worker.renderPNG(
+                tracks: tracks,
+                sourceName: sourceName,
+                options: options,
+                style: style
+            )
+            guard !Task.isCancelled,
+                  let self,
+                  generation == self.exportGeneration,
+                  revision == self.workspaceRevision else { return }
+
+            switch outcome {
+            case let .success(data, stats):
+                do {
+                    try await PhotoLibraryExporter.save(
+                        pngData: data,
+                        filename: filename
+                    )
+                    guard !Task.isCancelled,
+                          generation == self.exportGeneration,
+                          revision == self.workspaceRevision else { return }
+                    self.exportTask = nil
+                    self.isExporting = false
+                    self.statusMessage = "Saved \(filename).png to Photos"
+                    self.previewStats = stats
+                } catch {
+                    guard !Task.isCancelled,
+                          generation == self.exportGeneration else { return }
+                    self.exportTask = nil
+                    self.isExporting = false
+                    self.presentAlert(
+                        title: "Cannot save to Photos",
+                        message: Self.message(for: error)
+                    )
+                    self.statusMessage = Self.message(for: error)
+                }
+            case let .failure(message):
+                self.exportTask = nil
+                self.isExporting = false
+                self.presentAlert(title: "Cannot export", message: message)
+                self.statusMessage = message
+            case .cancelled:
+                self.exportTask = nil
+                self.isExporting = false
+            }
+        }
+    }
+
     func handleExport(_ result: Result<URL, Error>) {
         switch result {
         case let .success(url):
@@ -568,7 +633,7 @@ final class RouteWorkspace: ObservableObject {
         return source.standardizedFileURL.path
     }
 
-    nonisolated private static func message(for error: Error) -> String {
+    nonisolated fileprivate static func message(for error: Error) -> String {
         if let localized = error as? LocalizedError,
            let description = localized.errorDescription {
             return description
@@ -590,6 +655,12 @@ private enum RenderOutcome: Sendable {
     case cancelled
 }
 
+private enum PNGRenderOutcome: Sendable {
+    case success(Data, RenderStats)
+    case failure(String)
+    case cancelled
+}
+
 private actor RenderWorker {
     func render(
         tracks: [Track],
@@ -605,6 +676,33 @@ private actor RenderWorker {
             style: style
         )
         return Task.isCancelled ? .cancelled : outcome
+    }
+
+    func renderPNG(
+        tracks: [Track],
+        sourceName: String,
+        options: RenderOptions,
+        style: MapStyle
+    ) -> PNGRenderOutcome {
+        guard !Task.isCancelled else { return .cancelled }
+        switch RouteWorkspace.render(
+            tracks: tracks,
+            sourceName: sourceName,
+            options: options,
+            style: style
+        ) {
+        case let .success(svg, stats):
+            do {
+                let data = try rasterizedPNGData(from: svg)
+                return Task.isCancelled ? .cancelled : .success(data, stats)
+            } catch {
+                return .failure(RouteWorkspace.message(for: error))
+            }
+        case let .failure(message):
+            return .failure(message)
+        case .cancelled:
+            return .cancelled
+        }
     }
 }
 
