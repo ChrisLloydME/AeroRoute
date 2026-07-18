@@ -6,9 +6,16 @@
 //
 
 import SwiftUI
+#if os(macOS)
+import AppKit
+#endif
 
 @main
 struct AeroRouteApp: App {
+#if os(macOS)
+    @NSApplicationDelegateAdaptor(AeroRouteAppDelegate.self) private var appDelegate
+#endif
+
     var body: some Scene {
         WindowGroup {
             WorkspaceScene()
@@ -22,6 +29,14 @@ struct AeroRouteApp: App {
 #endif
     }
 }
+
+#if os(macOS)
+private final class AeroRouteAppDelegate: NSObject, NSApplicationDelegate {
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        true
+    }
+}
+#endif
 
 private struct WorkspaceScene: View {
     @StateObject private var workspace = RouteWorkspace()
