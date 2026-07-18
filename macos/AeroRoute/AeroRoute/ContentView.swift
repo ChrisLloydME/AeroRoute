@@ -7,6 +7,9 @@
 
 import SwiftUI
 import UniformTypeIdentifiers
+#if os(macOS)
+import AppKit
+#endif
 
 struct ContentView: View {
     @ObservedObject var workspace: RouteWorkspace
@@ -41,21 +44,7 @@ struct ContentView: View {
                 .help("Show or hide inspector")
             }
         }
-        .fileImporter(
-            isPresented: $workspace.isImporterPresented,
-            allowedContentTypes: [.commaSeparatedText],
-            allowsMultipleSelection: true
-        ) { result in
-            switch result {
-            case let .success(urls):
-                workspace.importURLs(urls)
-            case let .failure(error):
-                workspace.presentAlert(
-                    title: "Import failed",
-                    message: error.localizedDescription
-                )
-            }
-        }
+        .csvFileImporter(workspace: workspace)
         .fileExporter(
             isPresented: $workspace.isExporterPresented,
             document: workspace.exportDocument,
@@ -104,6 +93,70 @@ struct ContentView: View {
 #endif
     }
 }
+
+private extension View {
+    @ViewBuilder
+    func csvFileImporter(workspace: RouteWorkspace) -> some View {
+#if os(macOS)
+        modifier(MacOSCSVFileImporter(workspace: workspace))
+#else
+        fileImporter(
+            isPresented: Binding(
+                get: { workspace.isImporterPresented },
+                set: { workspace.isImporterPresented = $0 }
+            ),
+            allowedContentTypes: [.commaSeparatedText],
+            allowsMultipleSelection: true
+        ) { result in
+            switch result {
+            case let .success(urls):
+                workspace.importURLs(urls)
+            case let .failure(error):
+                workspace.presentAlert(
+                    title: "Import failed",
+                    message: error.localizedDescription
+                )
+            }
+        }
+#endif
+    }
+}
+
+#if os(macOS)
+private struct MacOSCSVFileImporter: ViewModifier {
+    @ObservedObject var workspace: RouteWorkspace
+    @State private var openPanel: NSOpenPanel?
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: workspace.isImporterPresented) { _, isPresented in
+                guard isPresented else { return }
+                presentOpenPanel()
+            }
+    }
+
+    @MainActor
+    private func presentOpenPanel() {
+        guard openPanel == nil else { return }
+
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.commaSeparatedText]
+        panel.allowsMultipleSelection = true
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        openPanel = panel
+
+        panel.begin { response in
+            defer {
+                openPanel = nil
+                workspace.isImporterPresented = false
+            }
+            guard response == .OK else { return }
+            workspace.importURLs(panel.urls)
+        }
+    }
+}
+#endif
 
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
