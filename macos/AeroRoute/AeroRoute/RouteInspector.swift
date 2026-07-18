@@ -69,7 +69,9 @@ struct RouteInspector: View {
         range: ClosedRange<Int>
     ) -> some View {
         Stepper(value: value, in: range) {
-            LabeledContent(title) {
+            HStack {
+                Text(title)
+                Spacer()
                 TextField(
                     title,
                     value: clamped(value, to: range),
@@ -92,7 +94,9 @@ struct RouteInspector: View {
         suffix: String
     ) -> some View {
         Stepper(value: value, in: range, step: step) {
-            LabeledContent(title) {
+            HStack {
+                Text(title)
+                Spacer()
                 HStack(spacing: 2) {
                     TextField(
                         title,

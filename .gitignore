@@ -22,6 +22,7 @@ __pycache__/
 /AeroRouteCore/.build/
 /AeroRouteCore/.swiftpm/
 /.deriveddata-codex/
+/.deriveddata-codex-macos/
 xcuserdata/
 *.xcuserstate
 .tmpBridge
