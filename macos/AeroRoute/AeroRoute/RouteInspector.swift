@@ -55,7 +55,7 @@ struct RouteInspector: View {
                     value: $workspace.settings.routeWidth,
                     range: 0.1...20,
                     step: 0.1,
-                    suffix: " pt"
+                    suffix: "pt"
                 )
             }
         }
@@ -97,7 +97,7 @@ struct RouteInspector: View {
             HStack {
                 Text(title)
                 Spacer()
-                HStack(spacing: 2) {
+                HStack(spacing: 4) {
                     TextField(
                         title,
                         value: clamped(value, to: range),
@@ -107,8 +107,9 @@ struct RouteInspector: View {
                         .textFieldStyle(.plain)
                         .multilineTextAlignment(.trailing)
                         .monospacedDigit()
-                        .frame(width: 66)
+                        .frame(width: 60)
                     Text(suffix)
+                        .fixedSize(horizontal: true, vertical: false)
                 }
                 .frame(width: 84, alignment: .trailing)
             }
@@ -129,18 +130,21 @@ struct RouteInspector: View {
         _ title: String,
         keyPath: WritableKeyPath<WorkspaceRenderSettings, String>
     ) -> some View {
-        ColorPicker(
-            selection: Binding(
-                get: { Color(hexRGB: workspace.settings[keyPath: keyPath]) },
-                set: { workspace.settings[keyPath: keyPath] = $0.hexRGB }
-            ),
-            supportsOpacity: false
-        ) {
-            LabeledContent(title) {
-                Text(workspace.settings[keyPath: keyPath])
-                    .font(.caption.monospaced())
-                    .foregroundStyle(.secondary)
-            }
+        HStack(spacing: 12) {
+            Text(title)
+            Spacer()
+            Text(workspace.settings[keyPath: keyPath])
+                .font(.caption.monospaced())
+                .foregroundStyle(.secondary)
+            ColorPicker(
+                title,
+                selection: Binding(
+                    get: { Color(hexRGB: workspace.settings[keyPath: keyPath]) },
+                    set: { workspace.settings[keyPath: keyPath] = $0.hexRGB }
+                ),
+                supportsOpacity: false
+            )
+            .labelsHidden()
         }
     }
 }
