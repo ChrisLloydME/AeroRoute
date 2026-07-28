@@ -105,7 +105,7 @@ private struct FlightLegList: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Flight Legs")
+            Text("Flight Information")
                 .font(.headline)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)

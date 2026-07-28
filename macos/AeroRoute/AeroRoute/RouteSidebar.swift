@@ -5,9 +5,9 @@ struct RouteSidebar: View {
 
     var body: some View {
         List(selection: $workspace.selectedLegID) {
-            Section("Flight Legs") {
+            Section("Files") {
                 ForEach(workspace.legs) { leg in
-                    FlightLegLabel(leg: leg)
+                    ImportedFileLabel(leg: leg)
                         .tag(leg.id)
                         .help(leg.source.path)
                 }
@@ -18,10 +18,10 @@ struct RouteSidebar: View {
         .overlay {
             if workspace.legs.isEmpty {
                 VStack(spacing: 10) {
-                    Image(systemName: "airplane")
+                    Image(systemName: "doc.text")
                         .font(.title2)
                         .foregroundStyle(.tertiary)
-                    Text("No Flight Legs")
+                    Text("No Files")
                         .font(.headline)
                     Text("Import or drop CSV files in itinerary order.")
                         .font(.caption)
@@ -49,10 +49,10 @@ struct RouteSidebar: View {
                     Button {
                         workspace.removeSelectedLeg()
                     } label: {
-                        Label("Remove Leg", systemImage: "minus")
+                        Label("Remove File", systemImage: "minus")
                     }
                     .disabled(workspace.selectedLegID == nil)
-                    .help("Remove selected flight leg")
+                    .help("Remove selected file")
                 }
                 .labelStyle(.iconOnly)
 
@@ -66,21 +66,16 @@ struct RouteSidebar: View {
     }
 }
 
-private struct FlightLegLabel: View {
+private struct ImportedFileLabel: View {
     let leg: FlightLegItem
 
     var body: some View {
         Label {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(leg.flightNumber)
-                    .fontWeight(.medium)
-                Text("\(leg.pointCount.formatted()) points · \(leg.callsign.isEmpty ? "no callsign" : leg.callsign)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
+            Text(leg.source.lastPathComponent)
+                .lineLimit(1)
+                .truncationMode(.middle)
         } icon: {
-            Image(systemName: "airplane")
+            Image(systemName: "doc.text")
                 .accessibilityHidden(true)
         }
         .padding(.vertical, 2)
