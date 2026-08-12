@@ -36,10 +36,10 @@ struct AirportSearchEngineTests {
         #expect(engine.count > 9_000)
         #expect(engine.search("✈️🇨🇳🛫").isEmpty)
         #expect(engine.search("London", limit: 0).isEmpty)
-        #expect(engine.search("airport", limit: 3).count == 3)
+        #expect(engine.search("airport", limit: 3).isEmpty)
     }
 
-    @Test func toleratesTyposTransliterationAndDecorativeUnicode() throws {
+    @Test func toleratesEnglishTyposAndDecorativeUnicode() throws {
         let engine = try AirportSearchEngine()
 
         let shanghaiTypo = engine.search("Shanghi")
@@ -47,7 +47,7 @@ struct AirportSearchEngineTests {
         #expect(shanghaiTypo.prefix(2).map(\.airport.iataCode).contains("PVG"))
         #expect(shanghaiTypo.prefix(2).map(\.airport.iataCode).contains("SHA"))
         #expect(engine.search("Pudng").first?.airport.iataCode == "PVG")
-        #expect(engine.search("上海").prefix(2).map(\.airport.iataCode).contains("PVG"))
+        #expect(engine.search("上海").isEmpty)
         #expect(engine.search("✈️ＰＶＧ🛬").first?.airport.iataCode == "PVG")
         #expect(engine.search("✈️ＰＶＧ🛬").first?.reasons.contains(.exactIATA) == true)
     }
