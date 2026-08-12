@@ -12,8 +12,10 @@ let package = Package(
         .library(name: "AeroRouteCore", targets: ["AeroRouteCore"]),
     ],
     targets: [
+        .systemLibrary(name: "CSQLite"),
         .target(
             name: "AeroRouteCore",
+            dependencies: ["CSQLite"],
             resources: [.process("Resources")]
         ),
         .testTarget(

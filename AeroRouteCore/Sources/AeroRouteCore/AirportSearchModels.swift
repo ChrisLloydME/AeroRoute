@@ -48,8 +48,19 @@ public enum AirportMatchReason: String, Sendable, Equatable, CaseIterable {
     case namePrefix
     case cityPrefix
     case allTerms
+    case fuzzyCode
     case fuzzyName
     case fuzzyCity
+}
+
+public struct AirportSearchError: Error, LocalizedError, Sendable, Equatable {
+    public let message: String
+
+    public init(_ message: String) {
+        self.message = message
+    }
+
+    public var errorDescription: String? { message }
 }
 
 public struct AirportSearchResult: Sendable, Equatable {
