@@ -143,8 +143,9 @@ public final class AirportSearchEngine: @unchecked Sendable {
         if (lhs.result.airport.iataCode != nil) != (rhs.result.airport.iataCode != nil) {
             return lhs.result.airport.iataCode != nil
         }
-        let nameOrder = lhs.result.airport.name.localizedStandardCompare(rhs.result.airport.name)
-        if nameOrder != .orderedSame { return nameOrder == .orderedAscending }
+        if lhs.result.airport.name != rhs.result.airport.name {
+            return lhs.result.airport.name < rhs.result.airport.name
+        }
         return lhs.result.airport.id < rhs.result.airport.id
     }
 
