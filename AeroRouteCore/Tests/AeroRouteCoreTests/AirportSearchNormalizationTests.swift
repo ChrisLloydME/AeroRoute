@@ -13,9 +13,10 @@ import Testing
         #expect(airportSearchText("Москва") == "moskva")
     }
 
-    @Test func recognizesOnlyBareASCIIAirportCodes() {
+    @Test func recognizesSingleNormalizedAirportCodes() {
         #expect(NormalizedAirportQuery(" pvg ").possibleCode == "PVG")
         #expect(NormalizedAirportQuery("ZSPD").possibleCode == "ZSPD")
+        #expect(NormalizedAirportQuery("✈️ＰＶＧ🛬").possibleCode == "PVG")
         #expect(NormalizedAirportQuery("PVG airport").possibleCode == nil)
         #expect(NormalizedAirportQuery("✈️").isEmpty)
         #expect(NormalizedAirportQuery("🇨🇳").isEmpty)

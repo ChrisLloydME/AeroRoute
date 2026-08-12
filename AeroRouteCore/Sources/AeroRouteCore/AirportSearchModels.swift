@@ -86,8 +86,7 @@ struct NormalizedAirportQuery: Sendable, Equatable {
         normalized = airportSearchText(input)
         tokens = normalized.split(separator: " ").map(String.init)
 
-        let code = input
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let code = normalized
             .uppercased(with: Locale(identifier: "en_US_POSIX"))
         if (code.count == 3 || code.count == 4),
            code.unicodeScalars.allSatisfy({ CharacterSet.uppercaseLetters.contains($0) && $0.isASCII }) {

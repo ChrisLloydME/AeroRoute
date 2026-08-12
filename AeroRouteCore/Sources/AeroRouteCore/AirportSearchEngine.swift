@@ -6,8 +6,6 @@ public final class AirportSearchEngine: @unchecked Sendable {
         let airport: Airport
         let name: String
         let city: String
-        let country: String
-        let countryCode: String
         let searchText: String
         let words: Set<String>
     }
@@ -230,8 +228,6 @@ public final class AirportSearchEngine: @unchecked Sendable {
                     airport: airport,
                     name: name,
                     city: city,
-                    country: countryName,
-                    countryCode: countryCode,
                     searchText: searchText,
                     words: Set(searchText.split(separator: " ").map(String.init))
                 )

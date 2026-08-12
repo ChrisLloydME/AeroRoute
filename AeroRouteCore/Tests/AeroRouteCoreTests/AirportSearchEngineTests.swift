@@ -38,4 +38,39 @@ struct AirportSearchEngineTests {
         #expect(engine.search("London", limit: 0).isEmpty)
         #expect(engine.search("airport", limit: 3).count == 3)
     }
+
+    @Test func toleratesTyposTransliterationAndDecorativeUnicode() throws {
+        let engine = try AirportSearchEngine()
+
+        let shanghaiTypo = engine.search("Shanghi")
+        #expect(shanghaiTypo.first?.airport.municipality?.hasPrefix("Shanghai") == true)
+        #expect(shanghaiTypo.prefix(2).map(\.airport.iataCode).contains("PVG"))
+        #expect(shanghaiTypo.prefix(2).map(\.airport.iataCode).contains("SHA"))
+        #expect(engine.search("Pudng").first?.airport.iataCode == "PVG")
+        #expect(engine.search("上海").prefix(2).map(\.airport.iataCode).contains("PVG"))
+        #expect(engine.search("✈️ＰＶＧ🛬").first?.airport.iataCode == "PVG")
+        #expect(engine.search("✈️ＰＶＧ🛬").first?.reasons.contains(.exactIATA) == true)
+    }
+
+    @Test func combinesFieldsAndReturnsStableOrdering() throws {
+        let engine = try AirportSearchEngine()
+
+        let mixed = engine.search("CN PVG Pudong")
+        #expect(mixed.first?.airport.iataCode == "PVG")
+        #expect(mixed.first?.reasons.contains(.allTerms) == true)
+
+        let firstRun = engine.search("London airport", limit: 12).map(\.airport.id)
+        let secondRun = engine.search("London airport", limit: 12).map(\.airport.id)
+        #expect(firstRun == secondRun)
+        #expect(Set(firstRun).count == firstRun.count)
+    }
+
+    @Test func fuzzyFourLetterCodeCanRecoverOneMistypedCharacter() throws {
+        let engine = try AirportSearchEngine()
+
+        let results = engine.search("ZSPC", limit: 20)
+        let pudong = results.first { $0.airport.icaoCode == "ZSPD" }
+        #expect(pudong != nil)
+        #expect(pudong?.reasons.contains(.fuzzyCode) == true)
+    }
 }
