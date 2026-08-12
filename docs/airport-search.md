@@ -1,49 +1,62 @@
 # Airport search algorithm
 
-`AirportSearchEngine` is an offline, UI-independent search component backed by
-the immutable bundled airport database. A caller supplies any Swift `String`
-and receives a deterministic, relevance-ranked list of `AirportSearchResult`
-values. Empty input, symbols, flags, and emoji are valid and safely return no
-results when they contain no searchable text.
+`AirportSearchEngine` is an English-only, offline, UI-independent search
+component backed by the immutable bundled airport database. A caller supplies
+any Swift `String` and receives a deterministic, relevance-ranked list of
+`AirportSearchResult` values. Empty input, unsupported scripts, symbols, flags,
+and emoji are valid and safely return no results when they contain no searchable
+English text.
 
 ## Query processing
 
 The engine processes input in this order:
 
-1. Apply Foundation's best-effort transliteration to Latin script.
-2. Fold case, diacritics, and full-width characters using a fixed POSIX locale.
-3. Replace punctuation, symbols, and emoji with token boundaries.
-4. Collapse whitespace and split the remaining text into terms.
-5. Treat a single three- or four-letter ASCII term as a possible airport code.
+1. Fold English case, Latin diacritics, and full-width characters using a fixed
+   POSIX locale.
+2. Discard non-ASCII scripts and replace punctuation, symbols, and emoji with
+   token boundaries.
+3. Expand selected English abbreviations such as `intl` and `apt`.
+4. Remove query noise such as `please`, `find`, `airport`, and `near`.
+5. Extract every plausible three- or four-letter code, including codes embedded
+   in a longer query.
 
-For example, `✈️ＰＶＧ🛬` becomes the code `PVG`, `São—Paulo` becomes the terms
-`sao paulo`, and Chinese `上海` becomes `shang hai` on Apple platforms.
-Transliteration is useful but not a multilingual alias database: names whose
-common English form differs from their phonetic transliteration may still need
-an airport or city alias dataset in the future.
+For example, `✈️ＰＶＧ🛬` becomes the code `PVG`, and `São—Paulo` becomes the
+terms `sao paulo`. Chinese `上海` has no English search terms and returns no
+result by design.
 
 ## Recall and ranking
 
-Every retained airport is eligible. The engine scores independent evidence and
-then applies stable tie-breakers. Strong signals are deliberately separated
-from weaker signals:
+The engine builds in-memory indexes over names, cities, countries, codes, and
+OurAirports keywords. A query recalls a compact candidate set through exact
+words, prefixes, codes, acronyms, and trigrams before detailed scoring. Strong
+signals are deliberately separated from weaker signals:
 
 1. exact IATA or ICAO code;
 2. exact airport name or city;
-3. airport-name or city prefix;
-4. all query terms found across name, city, country, country code, codes, and
-   upstream keywords;
-5. bounded edit-distance recovery for a code, airport-name word, or city word.
+3. exact upstream English alias or compact spelling;
+4. airport-name, city, or alias prefix;
+5. name/alias acronym;
+6. all meaningful query terms found across name, city, country, country code,
+   codes, and upstream keywords, regardless of word order;
+7. bounded Damerau-Levenshtein recovery for missing, extra, substituted, or
+   transposed characters;
+8. trigram similarity for merged words and longer phrase errors.
 
 Small bonuses prefer airports with scheduled service, an IATA code, and a large
 or medium classification. These bonuses never outrank a stronger match class.
 Remaining ties use airport importance, name, and stable OurAirports ID so the
 same database and query always produce the same order.
 
-Fuzzy matching permits one edit for words of four through seven characters and
+Fuzzy matching permits one edit for words of four through eight characters and
 two edits for longer words. Terms shorter than four characters must match
-exactly or by prefix, except for the explicit airport-code recovery path. This
-prevents short arbitrary input from producing excessively broad typo matches.
+exactly or by prefix. A three- or four-letter code is corrected only when the
+input consists of that code alone and no exact code exists. This prevents a real
+airport code from being silently replaced by another one.
+
+Results include `.exact`, `.high`, `.medium`, or `.low` confidence. City queries
+that plausibly identify several airports mark the near-top candidates as
+`isAmbiguous`; exact IATA/ICAO matches are decisive. Consumers should use these
+properties instead of automatically accepting the first low-confidence result.
 
 ## API
 
@@ -52,10 +65,17 @@ let search = try AirportSearchEngine()
 let results = search.search("Shanghai CN", limit: 10)
 
 for result in results {
-    print(result.airport.iataCode ?? "—", result.score, result.reasons)
+    print(
+        result.airport.iataCode ?? "—",
+        result.confidence,
+        result.isAmbiguous,
+        result.reasons
+    )
 }
 ```
 
 Loading can fail if the database resource is unavailable or invalid, so engine
-initialization throws. Searching an initialized engine is synchronous,
-side-effect free, thread-safe, and performs no network access.
+initialization throws. Build and retain one engine rather than recreating it for
+every keystroke: initialization builds the immutable indexes, while subsequent
+searches are synchronous, side-effect free, thread-safe, and perform no network
+access.

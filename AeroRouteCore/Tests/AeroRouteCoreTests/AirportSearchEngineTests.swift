@@ -3,12 +3,16 @@ import Testing
 
 @Suite(.serialized)
 struct AirportSearchEngineTests {
+    private static let engine = try! AirportSearchEngine()
+
     @Test func exactCodesHaveHighestConfidence() throws {
-        let engine = try AirportSearchEngine()
+        let engine = Self.engine
 
         let iata = engine.search(" pvg ")
         #expect(iata.first?.airport.icaoCode == "ZSPD")
         #expect(iata.first?.reasons.contains(.exactIATA) == true)
+        #expect(iata.first?.confidence == .exact)
+        #expect(iata.first?.isAmbiguous == false)
 
         let icao = engine.search("EGLL")
         #expect(icao.first?.airport.iataCode == "LHR")
@@ -16,7 +20,7 @@ struct AirportSearchEngineTests {
     }
 
     @Test func cityAndNameQueriesReturnRelevantAirports() throws {
-        let engine = try AirportSearchEngine()
+        let engine = Self.engine
 
         let london = engine.search("London", limit: 10)
         #expect(london.contains { $0.airport.iataCode == "LHR" })
@@ -31,7 +35,7 @@ struct AirportSearchEngineTests {
     }
 
     @Test func arbitraryTextIsSafeAndLimited() throws {
-        let engine = try AirportSearchEngine()
+        let engine = Self.engine
 
         #expect(engine.count > 9_000)
         #expect(engine.search("✈️🇨🇳🛫").isEmpty)
@@ -40,7 +44,7 @@ struct AirportSearchEngineTests {
     }
 
     @Test func toleratesEnglishTyposAndDecorativeUnicode() throws {
-        let engine = try AirportSearchEngine()
+        let engine = Self.engine
 
         let shanghaiTypo = engine.search("Shanghi")
         #expect(shanghaiTypo.first?.airport.municipality?.hasPrefix("Shanghai") == true)
@@ -53,7 +57,7 @@ struct AirportSearchEngineTests {
     }
 
     @Test func combinesFieldsAndReturnsStableOrdering() throws {
-        let engine = try AirportSearchEngine()
+        let engine = Self.engine
 
         let mixed = engine.search("CN PVG Pudong")
         #expect(mixed.first?.airport.iataCode == "PVG")
@@ -66,11 +70,68 @@ struct AirportSearchEngineTests {
     }
 
     @Test func fuzzyFourLetterCodeCanRecoverOneMistypedCharacter() throws {
-        let engine = try AirportSearchEngine()
+        let engine = Self.engine
 
         let results = engine.search("ZSPC", limit: 20)
         let pudong = results.first { $0.airport.icaoCode == "ZSPD" }
         #expect(pudong != nil)
         #expect(pudong?.reasons.contains(.fuzzyCode) == true)
+        #expect(pudong?.confidence == .low)
+    }
+
+    @Test func extractsCodesFromEnglishSentences() {
+        let results = Self.engine.search("Please find PVG airport")
+
+        #expect(results.first?.airport.iataCode == "PVG")
+        #expect(results.first?.reasons.contains(.exactIATA) == true)
+        #expect(results.first?.confidence == .exact)
+    }
+
+    @Test func understandsEnglishAliasesAbbreviationsAndAcronyms() {
+        #expect(Self.engine.search("Idlewild").first?.airport.iataCode == "JFK")
+        #expect(Self.engine.search("Heathrow Intl Airport").first?.airport.iataCode == "LHR")
+        let initials = Self.engine.search("LH")
+        #expect(initials.contains { $0.airport.iataCode == "LHR" })
+        #expect(initials.first?.reasons.contains(.acronym) == true)
+        #expect(initials.first?.isAmbiguous == true)
+
+        let nyc = Self.engine.search("NYC", limit: 10)
+        #expect(nyc.contains { $0.airport.iataCode == "JFK" })
+        #expect(nyc.first?.reasons.contains(.exactAlias) == true)
+
+        let lon = Self.engine.search("LON", limit: 10)
+        #expect(lon.contains { $0.airport.iataCode == "LHR" })
+        #expect(lon.contains { $0.airport.iataCode == "LGW" })
+        #expect(lon.first?.isAmbiguous == true)
+    }
+
+    @Test func matchesTermsAcrossEnglishFieldsInAnyOrder() {
+        #expect(Self.engine.search("Paris Charles Gaulle").first?.airport.iataCode == "CDG")
+        #expect(Self.engine.search("New York John Kennedy").first?.airport.iataCode == "JFK")
+        #expect(Self.engine.search("United Kingdom Heathrow").first?.airport.iataCode == "LHR")
+    }
+
+    @Test func handlesTranspositionsMergedWordsAndPhraseTypos() {
+        #expect(airportEditDistance("heathorw", "heathrow", limit: 1) == 1)
+        #expect(Self.engine.search("Heathorw").first?.airport.iataCode == "LHR")
+        #expect(Self.engine.search("newyorkcity").contains { $0.airport.iataCode == "JFK" })
+        #expect(Self.engine.search("sanfransisco").first?.airport.iataCode == "SFO")
+    }
+
+    @Test func marksCityQueriesAsAmbiguousButCodesAsDecisive() {
+        let london = Self.engine.search("London", limit: 10)
+        #expect(london.first?.isAmbiguous == true)
+        #expect(london.first?.confidence == .medium)
+        #expect(london.filter(\.isAmbiguous).count > 1)
+
+        let heathrow = Self.engine.search("LHR")
+        #expect(heathrow.first?.isAmbiguous == false)
+        #expect(heathrow.first?.confidence == .exact)
+    }
+
+    @Test func rejectsUnsupportedOrInsufficientInputInsteadOfGuessing() {
+        #expect(Self.engine.search("上海").isEmpty)
+        #expect(Self.engine.search("airport please").isEmpty)
+        #expect(Self.engine.search("qzxqzxqz").isEmpty)
     }
 }

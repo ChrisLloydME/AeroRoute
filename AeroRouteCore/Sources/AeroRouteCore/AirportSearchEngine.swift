@@ -75,10 +75,12 @@ public final class AirportSearchEngine: @unchecked Sendable {
         .sorted(by: rankedBefore)
 
         guard let first = ranked.first else { return [] }
-        let ambiguous = queryIsAmbiguous(ranked, query: query)
+        let ambiguous = queryIsAmbiguous(ranked)
         return ranked.prefix(limit).map { candidate in
             let nearTop = first.result.score - candidate.result.score <= 80
-            let isAmbiguous = ambiguous && nearTop
+            let isAmbiguous = ambiguous && (
+                nearTop || candidate.result.reasons.contains(.exactCity)
+            )
             let confidence: AirportSearchConfidence
             if isAmbiguous, candidate.result.confidence > .medium {
                 confidence = .medium
@@ -110,17 +112,24 @@ public final class AirportSearchEngine: @unchecked Sendable {
                 }
             }
         }
+        var tokenCandidates: Set<Int>?
         for token in query.significantTokens {
-            candidates.formUnion(indexes.words[token] ?? [])
-            candidates.formUnion(indexes.prefixes[token] ?? [])
+            var matches = Set(indexes.words[token] ?? [])
+            matches.formUnion(indexes.prefixes[token] ?? [])
             if token.count >= 4 {
                 for trigram in trigrams(token) {
-                    candidates.formUnion(indexes.trigrams[trigram] ?? [])
+                    matches.formUnion(indexes.trigrams[trigram] ?? [])
                 }
             }
+            if let current = tokenCandidates {
+                tokenCandidates = current.intersection(matches)
+            } else {
+                tokenCandidates = matches
+            }
         }
+        candidates.formUnion(tokenCandidates ?? [])
         candidates.formUnion(indexes.acronyms[query.compact] ?? [])
-        if query.compact.count >= 5 {
+        if query.significantTokens.count <= 1, query.compact.count >= 5 {
             for trigram in trigrams(query.compact) {
                 candidates.formUnion(indexes.trigrams[trigram] ?? [])
             }
@@ -317,10 +326,7 @@ public final class AirportSearchEngine: @unchecked Sendable {
         )
     }
 
-    private func queryIsAmbiguous(
-        _ ranked: [RankedAirport],
-        query: NormalizedAirportQuery
-    ) -> Bool {
+    private func queryIsAmbiguous(_ ranked: [RankedAirport]) -> Bool {
         guard ranked.count > 1 else { return false }
         let first = ranked[0].result
         let second = ranked[1].result
@@ -332,7 +338,6 @@ public final class AirportSearchEngine: @unchecked Sendable {
         }
         return first.score - second.score <= 30
             && first.confidence == second.confidence
-            && query.codeCandidates.isEmpty
     }
 
     private func confidence(
@@ -497,21 +502,18 @@ public final class AirportSearchEngine: @unchecked Sendable {
                 .union(record.countryWords)
                 .union(record.aliasWords)
             for word in allWords {
-                append(index, to: word, in: &indexes.words)
-                if word.count >= 2 {
-                    let characters = Array(word)
-                    for length in 2...characters.count {
-                        append(index, to: String(characters.prefix(length)), in: &indexes.prefixes)
-                    }
-                }
-                for trigram in trigrams(word) {
-                    append(index, to: trigram, in: &indexes.trigrams)
-                }
+                indexWord(word, airportIndex: index, indexes: &indexes)
             }
             for code in [record.airport.iataCode, record.airport.icaoCode].compactMap({ $0 }) {
                 indexes.knownCodes.insert(code)
                 append(index, to: code, in: &indexes.codes)
+                indexWord(code.lowercased(), airportIndex: index, indexes: &indexes)
             }
+            indexWord(
+                record.airport.countryCode.lowercased(),
+                airportIndex: index,
+                indexes: &indexes
+            )
             for acronym in record.acronyms {
                 append(index, to: acronym, in: &indexes.acronyms)
             }
@@ -522,6 +524,27 @@ public final class AirportSearchEngine: @unchecked Sendable {
             }
         }
         return indexes
+    }
+
+    private static func indexWord(
+        _ word: String,
+        airportIndex: Int,
+        indexes: inout SearchIndexes
+    ) {
+        append(airportIndex, to: word, in: &indexes.words)
+        if word.count >= 2 {
+            let characters = Array(word)
+            for length in 2...characters.count {
+                append(
+                    airportIndex,
+                    to: String(characters.prefix(length)),
+                    in: &indexes.prefixes
+                )
+            }
+        }
+        for trigram in trigrams(word) {
+            append(airportIndex, to: trigram, in: &indexes.trigrams)
+        }
     }
 
     private static func append(

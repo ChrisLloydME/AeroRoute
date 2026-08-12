@@ -117,8 +117,8 @@ struct NormalizedAirportQuery: Sendable, Equatable {
     ]
     private static let noiseWords: Set<String> = [
         "a", "an", "airport", "airports", "airfield", "at", "find", "flight",
-        "flights", "fly", "for", "in", "me", "near", "please", "search", "the",
-        "to",
+        "flights", "fly", "for", "in", "international", "me", "near", "please",
+        "regional", "search", "the", "to",
     ]
     private static let nonCodeWords: Set<String> = noiseWords.union([
         "city", "intl", "port",
@@ -137,12 +137,22 @@ struct NormalizedAirportQuery: Sendable, Equatable {
         original = input
         normalized = airportSearchText(input)
         let rawTokens = normalized.split(separator: " ").map(String.init)
+        let uppercaseTokens = Set(
+            airportCasePreservingText(input).split(separator: " ").map(String.init).filter {
+                $0.count == 3 || $0.count == 4
+            }.filter {
+                $0.unicodeScalars.allSatisfy {
+                    $0.isASCII && CharacterSet.uppercaseLetters.contains($0)
+                }
+            }.map { $0.lowercased() }
+        )
         tokens = rawTokens.map { Self.expansions[$0] ?? $0 }
         significantTokens = tokens.filter { !Self.noiseWords.contains($0) }
         compact = significantTokens.joined()
 
         codeCandidates = rawTokens.compactMap { token in
             guard !Self.nonCodeWords.contains(token),
+                  rawTokens.count == 1 || uppercaseTokens.contains(token),
                   token.count == 3 || token.count == 4,
                   token.unicodeScalars.allSatisfy({ $0.isASCII && CharacterSet.letters.contains($0) })
             else { return nil }
@@ -170,4 +180,17 @@ func airportSearchText(_ value: String) -> String {
     return String(scalars)
         .split(whereSeparator: { $0.isWhitespace })
         .joined(separator: " ")
+}
+
+private func airportCasePreservingText(_ value: String) -> String {
+    let folded = value.folding(
+        options: [.diacriticInsensitive, .widthInsensitive],
+        locale: Locale(identifier: "en_US_POSIX")
+    )
+    return String(folded.unicodeScalars.map { scalar -> Character in
+        if scalar.isASCII, CharacterSet.alphanumerics.contains(scalar) {
+            return Character(String(scalar))
+        }
+        return " "
+    })
 }
