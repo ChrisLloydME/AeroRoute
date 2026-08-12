@@ -47,10 +47,34 @@ public enum AirportMatchReason: String, Sendable, Equatable, CaseIterable {
     case exactCity
     case namePrefix
     case cityPrefix
+    case exactAlias
+    case aliasPrefix
+    case acronym
     case allTerms
+    case tokenMatch
     case fuzzyCode
     case fuzzyName
     case fuzzyCity
+    case fuzzyAlias
+    case fuzzyPhrase
+}
+
+public enum AirportSearchConfidence: String, Sendable, Equatable, Comparable {
+    case low
+    case medium
+    case high
+    case exact
+
+    private var rank: Int {
+        switch self {
+        case .low: 0
+        case .medium: 1
+        case .high: 2
+        case .exact: 3
+        }
+    }
+
+    public static func < (lhs: Self, rhs: Self) -> Bool { lhs.rank < rhs.rank }
 }
 
 public struct AirportSearchError: Error, LocalizedError, Sendable, Equatable {
@@ -67,47 +91,78 @@ public struct AirportSearchResult: Sendable, Equatable {
     public let airport: Airport
     public let score: Int
     public let reasons: [AirportMatchReason]
+    public let confidence: AirportSearchConfidence
+    public let isAmbiguous: Bool
 
-    public init(airport: Airport, score: Int, reasons: [AirportMatchReason]) {
+    public init(
+        airport: Airport,
+        score: Int,
+        reasons: [AirportMatchReason],
+        confidence: AirportSearchConfidence = .medium,
+        isAmbiguous: Bool = false
+    ) {
         self.airport = airport
         self.score = score
         self.reasons = reasons
+        self.confidence = confidence
+        self.isAmbiguous = isAmbiguous
     }
 }
 
 struct NormalizedAirportQuery: Sendable, Equatable {
+    private static let expansions = [
+        "airpt": "airport",
+        "apt": "airport",
+        "intl": "international",
+    ]
+    private static let noiseWords: Set<String> = [
+        "a", "an", "airport", "airports", "airfield", "at", "find", "flight",
+        "flights", "fly", "for", "in", "me", "near", "please", "search", "the",
+        "to",
+    ]
+    private static let nonCodeWords: Set<String> = noiseWords.union([
+        "city", "intl", "port",
+    ])
+
     let original: String
     let normalized: String
     let tokens: [String]
+    let significantTokens: [String]
+    let codeCandidates: [String]
+    let fuzzyCodeCandidate: String?
+    let compact: String
     let possibleCode: String?
 
     init(_ input: String) {
         original = input
         normalized = airportSearchText(input)
-        tokens = normalized.split(separator: " ").map(String.init)
+        let rawTokens = normalized.split(separator: " ").map(String.init)
+        tokens = rawTokens.map { Self.expansions[$0] ?? $0 }
+        significantTokens = tokens.filter { !Self.noiseWords.contains($0) }
+        compact = significantTokens.joined()
 
-        let code = normalized
-            .uppercased(with: Locale(identifier: "en_US_POSIX"))
-        if (code.count == 3 || code.count == 4),
-           code.unicodeScalars.allSatisfy({ CharacterSet.uppercaseLetters.contains($0) && $0.isASCII }) {
-            possibleCode = code
-        } else {
-            possibleCode = nil
+        codeCandidates = rawTokens.compactMap { token in
+            guard !Self.nonCodeWords.contains(token),
+                  token.count == 3 || token.count == 4,
+                  token.unicodeScalars.allSatisfy({ $0.isASCII && CharacterSet.letters.contains($0) })
+            else { return nil }
+            return token.uppercased(with: Locale(identifier: "en_US_POSIX"))
         }
+        possibleCode = rawTokens.count == 1 ? codeCandidates.first : nil
+        fuzzyCodeCandidate = significantTokens.count == 1 ? codeCandidates.first : nil
     }
 
-    var isEmpty: Bool { tokens.isEmpty && possibleCode == nil }
+    var isEmpty: Bool { significantTokens.isEmpty && codeCandidates.isEmpty }
 }
 
 func airportSearchText(_ value: String) -> String {
     let locale = Locale(identifier: "en_US_POSIX")
-    let transliterated = value.applyingTransform(.toLatin, reverse: false) ?? value
-    let folded = transliterated.folding(
+    let folded = value.folding(
         options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
         locale: locale
     )
     let scalars = folded.unicodeScalars.map { scalar -> Character in
-        if CharacterSet.alphanumerics.contains(scalar) {
+        if scalar.isASCII, CharacterSet.alphanumerics.contains(scalar) {
             return Character(String(scalar))
         }
         return " "

@@ -8,9 +8,10 @@ import Testing
         #expect(airportSearchText("Shànghǎi (Pudong)") == "shanghai pudong")
     }
 
-    @Test func transliteratesNonLatinInputWhenFoundationCan() {
-        #expect(airportSearchText("上海") == "shang hai")
-        #expect(airportSearchText("Москва") == "moskva")
+    @Test func deliberatelyIgnoresNonEnglishScripts() {
+        #expect(airportSearchText("上海") == "")
+        #expect(airportSearchText("Москва") == "")
+        #expect(NormalizedAirportQuery("上海✈️").isEmpty)
     }
 
     @Test func recognizesSingleNormalizedAirportCodes() {
@@ -18,7 +19,17 @@ import Testing
         #expect(NormalizedAirportQuery("ZSPD").possibleCode == "ZSPD")
         #expect(NormalizedAirportQuery("✈️ＰＶＧ🛬").possibleCode == "PVG")
         #expect(NormalizedAirportQuery("PVG airport").possibleCode == nil)
+        #expect(NormalizedAirportQuery("PVG airport").codeCandidates == ["PVG"])
         #expect(NormalizedAirportQuery("✈️").isEmpty)
         #expect(NormalizedAirportQuery("🇨🇳").isEmpty)
+    }
+
+    @Test func expandsEnglishAbbreviationsAndDropsQueryNoise() {
+        let query = NormalizedAirportQuery("Please find Heathrow Intl Airport")
+
+        #expect(query.tokens == ["please", "find", "heathrow", "international", "airport"])
+        #expect(query.significantTokens == ["heathrow", "international"])
+        #expect(query.compact == "heathrowinternational")
+        #expect(NormalizedAirportQuery("airport please").isEmpty)
     }
 }
