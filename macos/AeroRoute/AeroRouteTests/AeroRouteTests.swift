@@ -140,7 +140,7 @@ final class AeroRouteTests: XCTestCase {
     }
 
     @MainActor
-    func testZoomToFlightSettingReframesPreviewAndExport() async throws {
+    func testFitMapToRouteSettingReframesPreviewAndExport() async throws {
         let workspace = RouteWorkspace()
         workspace.importURLs([example("sk2596.csv")])
         try await waitForIdle(workspace)
@@ -149,7 +149,7 @@ final class AeroRouteTests: XCTestCase {
                 - XCTUnwrap(workspace.previewStats?.startXY.x)
         )
 
-        workspace.settings.zoomToFlight = true
+        workspace.settings.fitMapToRoute = true
         workspace.scheduleRender()
         try await waitForIdle(workspace)
 
@@ -158,13 +158,13 @@ final class AeroRouteTests: XCTestCase {
                 - XCTUnwrap(workspace.previewStats?.startXY.x)
         )
         XCTAssertGreaterThan(focusedWidth, worldWidth * 5)
-        XCTAssertTrue(workspace.previewSVG?.contains("data-map-scope=\"flight\"") == true)
+        XCTAssertTrue(workspace.previewSVG?.contains("data-map-scope=\"route\"") == true)
 
         workspace.prepareExport()
         try await waitForIdle(workspace)
         let exportData = try XCTUnwrap(workspace.exportDocument?.data)
         let exportSVG = try XCTUnwrap(String(data: exportData, encoding: .utf8))
-        XCTAssertTrue(exportSVG.contains("data-map-scope=\"flight\""))
+        XCTAssertTrue(exportSVG.contains("data-map-scope=\"route\""))
     }
 
     @MainActor

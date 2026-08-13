@@ -218,15 +218,15 @@ final class GoldenCompatibilityTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: destination), Data(built.svg.utf8))
     }
 
-    func testFlightFocusedRenderFillsMapViewport() throws {
+    func testRouteFittingRenderFillsMapViewport() throws {
         let track = try Self.loadFixtureTrack(Self.fixtures[0])
         let rendered = try SVGRenderer.buildSVG(
             track: track,
-            options: RenderOptions(zoomToFlight: true)
+            options: RenderOptions(fitMapToRoute: true)
         )
         let viewport = MapViewport(left: 0, top: 0, right: 1_600, bottom: 1_000)
 
-        XCTAssertTrue(rendered.svg.contains("data-map-scope=\"flight\""))
+        XCTAssertTrue(rendered.svg.contains("data-map-scope=\"route\""))
         XCTAssertTrue(
             rendered.svg.contains(
                 "<rect x=\"0\" y=\"0\" width=\"1600\" height=\"1000\" />"

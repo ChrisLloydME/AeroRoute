@@ -57,8 +57,8 @@ struct GeometryTests {
         #expect(result.map { $0.latitude } == [1, 2, 3, 4])
     }
 
-    @Test func flightFocusedProjectionFitsTrackAndCanvasAspect() {
-        let projection = AeroRouteGeometry.flightFocusedProjection(
+    @Test func routeFittingProjectionFitsTrackAndCanvasAspect() {
+        let projection = AeroRouteGeometry.routeFittingProjection(
             coordinates: [
                 (longitude: 8, latitude: 47),
                 (longitude: 12, latitude: 49),
@@ -80,8 +80,8 @@ struct GeometryTests {
         )
     }
 
-    @Test func flightFocusedProjectionUsesShortAntimeridianSpan() {
-        let projection = AeroRouteGeometry.flightFocusedProjection(
+    @Test func routeFittingProjectionUsesShortAntimeridianSpan() {
+        let projection = AeroRouteGeometry.routeFittingProjection(
             coordinates: [
                 (longitude: 175, latitude: 10),
                 (longitude: -175, latitude: 12),

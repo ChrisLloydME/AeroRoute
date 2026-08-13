@@ -106,7 +106,7 @@ public enum AeroRouteGeometry {
 
     /// Builds an aspect-fitted region around a flight track with editorial
     /// breathing room. Longitudes are unwrapped before measuring the bounds.
-    public static func flightFocusedProjection(
+    public static func routeFittingProjection(
         coordinates: [(longitude: Double, latitude: Double)],
         width: Double,
         height: Double,

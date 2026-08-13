@@ -48,7 +48,7 @@ public struct RenderOptions: Equatable, Sendable {
     public var showCountryLabels: Bool
     public var showAirports: Bool
     public var showFlightNumber: Bool
-    public var zoomToFlight: Bool
+    public var fitMapToRoute: Bool
     public var flightNumber: String?
     public var originCode: String?
     public var destinationCode: String?
@@ -67,7 +67,7 @@ public struct RenderOptions: Equatable, Sendable {
         showCountryLabels: Bool = false,
         showAirports: Bool = false,
         showFlightNumber: Bool = false,
-        zoomToFlight: Bool = false,
+        fitMapToRoute: Bool = false,
         flightNumber: String? = nil,
         originCode: String? = nil,
         destinationCode: String? = nil,
@@ -85,7 +85,7 @@ public struct RenderOptions: Equatable, Sendable {
         self.showCountryLabels = showCountryLabels
         self.showAirports = showAirports
         self.showFlightNumber = showFlightNumber
-        self.zoomToFlight = zoomToFlight
+        self.fitMapToRoute = fitMapToRoute
         self.flightNumber = flightNumber
         self.originCode = originCode
         self.destinationCode = destinationCode
@@ -205,22 +205,22 @@ public enum SVGRenderer {
         )
 
         let definitions = root.add("defs")
-        let viewport = options.zoomToFlight
+        let viewport = options.fitMapToRoute
             ? MapViewport(left: 0, top: 0, right: widthDouble, bottom: heightDouble)
             : AeroRouteGeometry.mapViewport(width: widthDouble, height: heightDouble)
         let unwrapped = AeroRouteGeometry.unwrapLongitudes(
             track.points.map { ($0.longitude, $0.latitude) }
         )
-        let projection = options.zoomToFlight
-            ? AeroRouteGeometry.flightFocusedProjection(
+        let projection = options.fitMapToRoute
+            ? AeroRouteGeometry.routeFittingProjection(
                 coordinates: unwrapped,
                 width: widthDouble,
                 height: heightDouble,
                 viewport: viewport
             )
             : nil
-        if options.zoomToFlight {
-            root.setAttribute("data-map-scope", "flight")
+        if options.fitMapToRoute {
+            root.setAttribute("data-map-scope", "route")
         }
         let clipPath = definitions.add(
             "clipPath",
