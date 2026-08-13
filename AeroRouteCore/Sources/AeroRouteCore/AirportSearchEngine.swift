@@ -95,19 +95,54 @@ public final class AirportSearchEngine: @unchecked Sendable {
 
     public var count: Int { airports.count }
 
+    /// Unified UI-facing entry point for both incremental and submitted lookup.
+    public func lookup(_ request: AirportSearchRequest) -> AirportSearchResponse {
+        let query = NormalizedAirportQuery(request.text)
+        let defaultLimit = request.phase == .editing ? 8 : 20
+        let limit = max(0, request.limit ?? defaultLimit)
+        let results: [AirportSearchResult]
+        switch request.phase {
+        case .editing:
+            results = rankedResults(
+                query,
+                limit: limit,
+                policy: .suggestions(for: query)
+            )
+        case .submitted:
+            results = rankedResults(query, limit: limit, policy: .submitted)
+        }
+
+        let resolution: AirportSearchResolution
+        if query.isEmpty {
+            resolution = .emptyInput
+        } else if results.isEmpty {
+            resolution = .noMatches
+        } else if request.phase == .editing {
+            resolution = .suggestions
+        } else if results[0].confidence == .exact, !results[0].isAmbiguous {
+            resolution = .automaticSelection
+        } else {
+            resolution = .manualSelection
+        }
+
+        return AirportSearchResponse(
+            request: request,
+            normalizedText: query.normalized,
+            resolution: resolution,
+            results: results
+        )
+    }
+
+    /// Compatibility wrapper. New UI code should call `lookup(_:)`.
     public func search(_ input: String, limit: Int = 20) -> [AirportSearchResult] {
-        rankedResults(input, limit: limit, policy: .submitted)
+        lookup(AirportSearchRequest(text: input, phase: .submitted, limit: limit)).results
     }
 
     /// Returns low-latency incremental candidates suitable for search-as-you-type UI.
     /// Fuzzy text matching starts at four characters and code correction is disabled.
+    /// Compatibility wrapper. New UI code should call `lookup(_:)`.
     public func suggestions(for input: String, limit: Int = 8) -> [AirportSearchResult] {
-        let query = NormalizedAirportQuery(input)
-        return rankedResults(
-            query,
-            limit: limit,
-            policy: .suggestions(for: query)
-        )
+        lookup(AirportSearchRequest(text: input, phase: .editing, limit: limit)).results
     }
 
     private func rankedResults(
@@ -740,7 +775,8 @@ public final class AirportSearchEngine: @unchecked Sendable {
                 latitude: sqlite3_column_double(statement, 7),
                 longitude: sqlite3_column_double(statement, 8),
                 type: text(statement, 9) ?? "",
-                hasScheduledService: sqlite3_column_int(statement, 10) == 1
+                hasScheduledService: sqlite3_column_int(statement, 10) == 1,
+                countryName: text(statement, 12) ?? ""
             )
             records.append(makeSearchableAirport(
                 airport: airport,

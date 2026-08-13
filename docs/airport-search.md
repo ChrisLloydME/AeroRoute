@@ -86,19 +86,56 @@ properties instead of automatically accepting the first low-confidence result.
 
 ## API
 
+UI code should use the unified request/response API for both phases:
+
 ```swift
 let search = try AirportSearchEngine()
-let results = search.search("Shanghai CN", limit: 10)
 
-for result in results {
-    print(
-        result.airport.iataCode ?? "—",
-        result.confidence,
-        result.isAmbiguous,
-        result.reasons
-    )
+let response = search.lookup(.init(
+    text: currentText,
+    phase: isEditing ? .editing : .submitted,
+    limit: nil // phase default: 8 while editing, 20 when submitted
+))
+
+switch response.resolution {
+case .emptyInput:
+    // No supported searchable English text.
+case .noMatches:
+    // Valid search text, but no result met the threshold.
+case .suggestions, .manualSelection:
+    // Present response.results and let the user select.
+case .automaticSelection:
+    if let result = response.automaticSelection {
+        // It is safe to fill result.airport.
+    }
 }
 ```
+
+The stable contract is:
+
+| Type | Purpose |
+| --- | --- |
+| `AirportSearchRequest` | Original text, `.editing`/`.submitted` phase, optional limit |
+| `AirportSearchResponse` | Echoed request, normalized text, resolution, ranked results |
+| `AirportSearchResolution` | UI state and automatic/manual-selection decision |
+| `AirportSearchResult` | Identifiable airport, confidence, ambiguity, diagnostic reasons |
+| `Airport` | Stable ID, country/city/name, IATA/ICAO, coordinates and service metadata |
+
+Only a submitted result with `.exact` confidence and no ambiguity produces
+`.automaticSelection`. Editing never automatically selects, even when the
+current text happens to equal a code. UI code must not derive behavior from the
+raw integer `score`; it is an internal ranking value whose scale may evolve.
+
+`AirportSearchResult.id` is the underlying stable airport ID, so result arrays
+can be passed directly to SwiftUI `ForEach`. `Airport` includes both
+`countryCode` and `countryName`; the UI does not need a separate country lookup.
+
+`response.request` echoes the complete request. If lookup is dispatched from an
+asynchronous UI task, compare the echoed text or the complete request with the
+current field state before applying the response.
+
+The older `search(_:limit:)` and `suggestions(for:limit:)` methods remain as
+compatibility wrappers and return exactly the same result arrays as `lookup`.
 
 Loading can fail if the database resource is unavailable or invalid, so engine
 initialization throws. Build and retain one engine rather than recreating it for
