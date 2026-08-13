@@ -99,6 +99,11 @@ final class AeroRouteTests: XCTestCase {
         let data = try rasterizedPNGData(from: svg)
 
         XCTAssertEqual(Array(data.prefix(8)), [137, 80, 78, 71, 13, 10, 26, 10])
+#if os(macOS)
+        let representation = try XCTUnwrap(NSBitmapImageRep(data: data))
+        XCTAssertEqual(representation.pixelsWide, 32)
+        XCTAssertEqual(representation.pixelsHigh, 20)
+#endif
     }
 
     @MainActor

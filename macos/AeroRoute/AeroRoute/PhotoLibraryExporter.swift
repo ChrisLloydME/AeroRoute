@@ -35,15 +35,45 @@ nonisolated func rasterizedPNGData(from svg: String) throws -> Data {
         guard let image = NSImage(data: svgData) else {
             throw PhotoExportError.invalidSVG
         }
-        var proposedRect = NSRect(origin: .zero, size: image.size)
-        guard let cgImage = image.cgImage(
-            forProposedRect: &proposedRect,
-            context: nil,
-            hints: nil
-        ) else {
+        guard image.size.width.isFinite,
+              image.size.height.isFinite,
+              image.size.width >= 1,
+              image.size.height >= 1,
+              image.size.width <= CGFloat(Int.max),
+              image.size.height <= CGFloat(Int.max) else {
             throw PhotoExportError.invalidSVG
         }
-        let representation = NSBitmapImageRep(cgImage: cgImage)
+        let pixelWidth = Int(image.size.width.rounded())
+        let pixelHeight = Int(image.size.height.rounded())
+        guard pixelWidth > 0,
+              pixelHeight > 0,
+              let representation = NSBitmapImageRep(
+                  bitmapDataPlanes: nil,
+                  pixelsWide: pixelWidth,
+                  pixelsHigh: pixelHeight,
+                  bitsPerSample: 8,
+                  samplesPerPixel: 4,
+                  hasAlpha: true,
+                  isPlanar: false,
+                  colorSpaceName: .deviceRGB,
+                  bytesPerRow: 0,
+                  bitsPerPixel: 0
+              ),
+              let context = NSGraphicsContext(bitmapImageRep: representation) else {
+            throw PhotoExportError.invalidSVG
+        }
+
+        representation.size = image.size
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = context
+        image.draw(
+            in: NSRect(origin: .zero, size: image.size),
+            from: .zero,
+            operation: .copy,
+            fraction: 1
+        )
+        NSGraphicsContext.restoreGraphicsState()
+
         guard let data = representation.representation(using: .png, properties: [:]) else {
             throw PhotoExportError.pngEncodingFailed
         }
