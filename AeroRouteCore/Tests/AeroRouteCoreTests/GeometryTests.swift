@@ -57,6 +57,49 @@ struct GeometryTests {
         #expect(result.map { $0.latitude } == [1, 2, 3, 4])
     }
 
+    @Test func flightFocusedProjectionFitsTrackAndCanvasAspect() {
+        let projection = AeroRouteGeometry.flightFocusedProjection(
+            coordinates: [
+                (longitude: 8, latitude: 47),
+                (longitude: 12, latitude: 49),
+            ],
+            width: 1_600,
+            height: 1_000
+        )
+        let viewport = AeroRouteGeometry.mapViewport(width: 1_600, height: 1_000)
+        let geographicAspect = (projection.maximumLongitude - projection.minimumLongitude)
+            / (projection.maximumLatitude - projection.minimumLatitude)
+
+        #expect(projection.minimumLongitude < 8)
+        #expect(projection.maximumLongitude > 12)
+        #expect(projection.minimumLatitude < 47)
+        #expect(projection.maximumLatitude > 49)
+        #expect(
+            abs(geographicAspect - (viewport.right - viewport.left)
+                / (viewport.bottom - viewport.top)) < 0.000_001
+        )
+    }
+
+    @Test func flightFocusedProjectionUsesShortAntimeridianSpan() {
+        let projection = AeroRouteGeometry.flightFocusedProjection(
+            coordinates: [
+                (longitude: 175, latitude: 10),
+                (longitude: -175, latitude: 12),
+            ],
+            width: 1_600,
+            height: 1_000
+        )
+
+        #expect(projection.centerLongitude == 180)
+        #expect(projection.maximumLongitude - projection.minimumLongitude < 30)
+        #expect(
+            AeroRouteGeometry.longitudeNearestProjectionCenter(
+                -175,
+                projection: projection
+            ) == 185
+        )
+    }
+
     @Test func coordinateFormattingMatchesPython() {
         #expect(AeroRouteGeometry.formatCoordinate(12.340000) == "12.34")
         #expect(AeroRouteGeometry.formatCoordinate(-0.0000001) == "0")

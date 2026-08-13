@@ -24,6 +24,32 @@ public struct MapViewport: Equatable, Sendable {
     }
 }
 
+/// The geographic bounds mapped into the fixed map viewport.
+public struct MapProjection: Equatable, Sendable {
+    public let minimumLongitude: Double
+    public let maximumLongitude: Double
+    public let minimumLatitude: Double
+    public let maximumLatitude: Double
+
+    public init(
+        minimumLongitude: Double,
+        maximumLongitude: Double,
+        minimumLatitude: Double,
+        maximumLatitude: Double
+    ) {
+        precondition(maximumLongitude > minimumLongitude)
+        precondition(maximumLatitude > minimumLatitude)
+        self.minimumLongitude = minimumLongitude
+        self.maximumLongitude = maximumLongitude
+        self.minimumLatitude = minimumLatitude
+        self.maximumLatitude = maximumLatitude
+    }
+
+    public var centerLongitude: Double {
+        (minimumLongitude + maximumLongitude) / 2
+    }
+}
+
 public enum AeroRouteGeometry {
     /// The flat-map drawing bounds used by the reference renderer.
     ///
@@ -55,6 +81,75 @@ public enum AeroRouteGeometry {
             + (latitudeMaximum - latitude) / (latitudeMaximum - latitudeMinimum)
             * (viewport.bottom - viewport.top)
         return Point2D(x: x, y: y)
+    }
+
+    /// Projects WGS84 coordinates into a caller-provided geographic region.
+    public static func project(
+        longitude: Double,
+        latitude: Double,
+        width: Double,
+        height: Double,
+        projection: MapProjection
+    ) -> Point2D {
+        let viewport = mapViewport(width: width, height: height)
+        let x = viewport.left
+            + (longitude - projection.minimumLongitude)
+            / (projection.maximumLongitude - projection.minimumLongitude)
+            * (viewport.right - viewport.left)
+        let y = viewport.top
+            + (projection.maximumLatitude - latitude)
+            / (projection.maximumLatitude - projection.minimumLatitude)
+            * (viewport.bottom - viewport.top)
+        return Point2D(x: x, y: y)
+    }
+
+    /// Builds an aspect-fitted region around a flight track with editorial
+    /// breathing room. Longitudes are unwrapped before measuring the bounds.
+    public static func flightFocusedProjection(
+        coordinates: [(longitude: Double, latitude: Double)],
+        width: Double,
+        height: Double,
+        paddingFraction: Double = 0.08
+    ) -> MapProjection {
+        precondition(!coordinates.isEmpty)
+        precondition(width > 0 && height > 0)
+        precondition(paddingFraction >= 0)
+
+        let unwrapped = unwrapLongitudes(coordinates)
+        let longitudes = unwrapped.map(\.longitude)
+        let latitudes = unwrapped.map(\.latitude)
+        let longitudeCenter = (longitudes.min()! + longitudes.max()!) / 2
+        let latitudeCenter = (latitudes.min()! + latitudes.max()!) / 2
+        var longitudeSpan = max(longitudes.max()! - longitudes.min()!, 2)
+        var latitudeSpan = max(latitudes.max()! - latitudes.min()!, 2)
+
+        let paddingScale = 1 + paddingFraction * 2
+        longitudeSpan *= paddingScale
+        latitudeSpan *= paddingScale
+
+        let viewport = mapViewport(width: width, height: height)
+        let viewportAspect = (viewport.right - viewport.left)
+            / (viewport.bottom - viewport.top)
+        if longitudeSpan / latitudeSpan < viewportAspect {
+            longitudeSpan = latitudeSpan * viewportAspect
+        } else {
+            latitudeSpan = longitudeSpan / viewportAspect
+        }
+
+        return MapProjection(
+            minimumLongitude: longitudeCenter - longitudeSpan / 2,
+            maximumLongitude: longitudeCenter + longitudeSpan / 2,
+            minimumLatitude: latitudeCenter - latitudeSpan / 2,
+            maximumLatitude: latitudeCenter + latitudeSpan / 2
+        )
+    }
+
+    /// Returns the equivalent longitude nearest the projection center.
+    public static func longitudeNearestProjectionCenter(
+        _ longitude: Double,
+        projection: MapProjection
+    ) -> Double {
+        longitude + (360 * ((projection.centerLongitude - longitude) / 360).rounded())
     }
 
     /// Keeps adjacent longitudes continuous when a track crosses the
@@ -192,6 +287,58 @@ public enum AeroRouteGeometry {
                         latitude: $0.latitude,
                         width: width,
                         height: height
+                    )
+                }
+                guard let first = projected.first else { continue }
+                commands.append(
+                    "M \(formatCoordinate(first.x)) \(formatCoordinate(first.y))"
+                )
+                commands.append(contentsOf: projected.dropFirst().map {
+                    "L \(formatCoordinate($0.x)) \(formatCoordinate($0.y))"
+                })
+                commands.append("Z")
+            }
+        }
+        return commands.joined(separator: " ")
+    }
+
+    /// Converts GeoJSON into a path for a focused projection, moving each
+    /// complete ring to the world copy nearest the flight.
+    public static func geoJSONPath(
+        geometry: GeoJSONGeometry,
+        width: Double,
+        height: Double,
+        projection: MapProjection
+    ) -> String {
+        let polygons: [GeoJSONPolygonCoordinates]
+        switch geometry {
+        case .polygon(let coordinates):
+            polygons = [coordinates]
+        case .multiPolygon(let coordinates):
+            polygons = coordinates
+        case .unsupported:
+            return ""
+        }
+
+        var commands: [String] = []
+        for polygon in polygons {
+            for ring in polygon where !ring.isEmpty {
+                let coordinates = unwrapLongitudes(
+                    ring.map { ($0.longitude, $0.latitude) }
+                )
+                let ringCenter = coordinates.map(\.longitude).reduce(0, +)
+                    / Double(coordinates.count)
+                let shift = longitudeNearestProjectionCenter(
+                    ringCenter,
+                    projection: projection
+                ) - ringCenter
+                let projected = coordinates.map {
+                    project(
+                        longitude: $0.longitude + shift,
+                        latitude: $0.latitude,
+                        width: width,
+                        height: height,
+                        projection: projection
                     )
                 }
                 guard let first = projected.first else { continue }
