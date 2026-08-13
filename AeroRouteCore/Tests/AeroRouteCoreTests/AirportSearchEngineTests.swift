@@ -126,4 +126,37 @@ struct AirportSearchEngineTests {
         #expect(Self.engine.search("airport").isEmpty)
         #expect(Self.engine.search("qzxqzxqz").isEmpty)
     }
+
+    @Test func suggestionsNarrowAsTheUserTypesAnAirportCode() {
+        let p = Self.engine.suggestions(for: "p")
+        let pv = Self.engine.suggestions(for: "pv")
+        let pvg = Self.engine.suggestions(for: "pvg")
+
+        #expect(!p.isEmpty)
+        #expect(pv.contains { $0.airport.iataCode == "PVG" })
+        #expect(pvg.first?.airport.iataCode == "PVG")
+        #expect(pvg.first?.confidence == .exact)
+        #expect(pvg.first?.reasons.contains(.exactIATA) == true)
+    }
+
+    @Test func suggestionsSupportNameAndCityPrefixesFromOneCharacter() {
+        let s = Self.engine.suggestions(for: "s", limit: 10)
+        let sh = Self.engine.suggestions(for: "sh", limit: 10)
+        let shang = Self.engine.suggestions(for: "shang", limit: 10)
+
+        #expect(!s.isEmpty)
+        #expect(sh.contains { $0.reasons.contains(.codePrefix) })
+        #expect(shang.prefix(3).contains { $0.airport.iataCode == "PVG" })
+        #expect(shang.prefix(3).contains { $0.airport.iataCode == "SHA" })
+    }
+
+    @Test func suggestionsAvoidCodeCorrectionWhileTheUserIsStillTyping() {
+        let partial = Self.engine.suggestions(for: "ZSPC", limit: 20)
+        #expect(partial.allSatisfy { !$0.reasons.contains(.fuzzyCode) })
+
+        let submitted = Self.engine.search("ZSPC", limit: 20)
+        #expect(submitted.contains {
+            $0.airport.icaoCode == "ZSPD" && $0.reasons.contains(.fuzzyCode)
+        })
+    }
 }

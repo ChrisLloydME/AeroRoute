@@ -26,6 +26,29 @@ public final class AirportSearchEngine: @unchecked Sendable {
         let reason: AirportMatchReason
     }
 
+    private struct SearchPolicy {
+        let minimumPrefixLength: Int
+        let codePrefixPoints: Int
+        let allowsFuzzyText: Bool
+        let allowsFuzzyCode: Bool
+
+        static let submitted = SearchPolicy(
+            minimumPrefixLength: 2,
+            codePrefixPoints: 0,
+            allowsFuzzyText: true,
+            allowsFuzzyCode: true
+        )
+
+        static func suggestions(for query: NormalizedAirportQuery) -> SearchPolicy {
+            SearchPolicy(
+                minimumPrefixLength: 1,
+                codePrefixPoints: 720,
+                allowsFuzzyText: query.compact.count >= 4,
+                allowsFuzzyCode: false
+            )
+        }
+    }
+
     private struct SearchIndexes: Sendable {
         var words: [String: [Int]] = [:]
         var prefixes: [String: [Int]] = [:]
@@ -58,17 +81,48 @@ public final class AirportSearchEngine: @unchecked Sendable {
     public var count: Int { airports.count }
 
     public func search(_ input: String, limit: Int = 20) -> [AirportSearchResult] {
-        guard limit > 0 else { return [] }
+        rankedResults(input, limit: limit, policy: .submitted)
+    }
+
+    /// Returns low-latency incremental candidates suitable for search-as-you-type UI.
+    /// Fuzzy text matching starts at four characters and code correction is disabled.
+    public func suggestions(for input: String, limit: Int = 8) -> [AirportSearchResult] {
         let query = NormalizedAirportQuery(input)
+        return rankedResults(
+            query,
+            limit: limit,
+            policy: .suggestions(for: query)
+        )
+    }
+
+    private func rankedResults(
+        _ input: String,
+        limit: Int,
+        policy: SearchPolicy
+    ) -> [AirportSearchResult] {
+        rankedResults(NormalizedAirportQuery(input), limit: limit, policy: policy)
+    }
+
+    private func rankedResults(
+        _ query: NormalizedAirportQuery,
+        limit: Int,
+        policy: SearchPolicy
+    ) -> [AirportSearchResult] {
+        guard limit > 0 else { return [] }
         guard !query.isEmpty else { return [] }
 
         let permitFuzzyCode = query.fuzzyCodeCandidate.map {
-            !indexes.knownCodes.contains($0)
+            policy.allowsFuzzyCode && !indexes.knownCodes.contains($0)
         } ?? false
         let candidates = candidateIndices(for: query, permitFuzzyCode: permitFuzzyCode)
         let ranked = candidates.compactMap { index -> RankedAirport? in
             let record = airports[index]
-            guard let result = score(record, for: query, permitFuzzyCode: permitFuzzyCode)
+            guard let result = score(
+                record,
+                for: query,
+                permitFuzzyCode: permitFuzzyCode,
+                policy: policy
+            )
             else { return nil }
             return RankedAirport(result: result, typeRank: airportTypeRank(record.airport.type))
         }
@@ -140,7 +194,8 @@ public final class AirportSearchEngine: @unchecked Sendable {
     private func score(
         _ record: SearchableAirport,
         for query: NormalizedAirportQuery,
-        permitFuzzyCode: Bool
+        permitFuzzyCode: Bool,
+        policy: SearchPolicy
     ) -> AirportSearchResult? {
         var score = 0
         var reasons: [AirportMatchReason] = []
@@ -157,9 +212,15 @@ public final class AirportSearchEngine: @unchecked Sendable {
 
         addPhraseEvidence(record, phrase: phrase, score: &score, reasons: &reasons)
         addAcronymEvidence(record, compact: query.compact, score: &score, reasons: &reasons)
-        addTokenEvidence(record, tokens: query.significantTokens, score: &score, reasons: &reasons)
+        addTokenEvidence(
+            record,
+            tokens: query.significantTokens,
+            policy: policy,
+            score: &score,
+            reasons: &reasons
+        )
 
-        if score == 0 {
+        if score == 0, policy.allowsFuzzyText || permitFuzzyCode {
             addFuzzyPhraseEvidence(
                 record,
                 query: query,
@@ -191,21 +252,22 @@ public final class AirportSearchEngine: @unchecked Sendable {
         guard !phrase.isEmpty else { return }
         if phrase == record.name {
             add(1_550, .exactName, score: &score, reasons: &reasons)
-        } else if record.name.hasPrefix(phrase + " ") {
+        } else if phrase.count >= 3, record.name.hasPrefix(phrase) {
             add(1_050, .namePrefix, score: &score, reasons: &reasons)
         }
 
         if !record.city.isEmpty {
             if phrase == record.city {
                 add(1_400, .exactCity, score: &score, reasons: &reasons)
-            } else if record.city.hasPrefix(phrase + " ") {
+            } else if phrase.count >= 3, record.city.hasPrefix(phrase) {
                 add(980, .cityPrefix, score: &score, reasons: &reasons)
             }
         }
 
         if record.aliases.contains(phrase) {
             add(1_480, .exactAlias, score: &score, reasons: &reasons)
-        } else if record.aliases.contains(where: { $0.hasPrefix(phrase + " ") }) {
+        } else if phrase.count >= 3,
+                  record.aliases.contains(where: { $0.hasPrefix(phrase) }) {
             add(1_020, .aliasPrefix, score: &score, reasons: &reasons)
         }
 
@@ -227,11 +289,14 @@ public final class AirportSearchEngine: @unchecked Sendable {
     private func addTokenEvidence(
         _ record: SearchableAirport,
         tokens: [String],
+        policy: SearchPolicy,
         score: inout Int,
         reasons: inout [AirportMatchReason]
     ) {
         guard !tokens.isEmpty else { return }
-        let evidence = tokens.compactMap { bestTokenEvidence($0, record: record) }
+        let evidence = tokens.compactMap {
+            bestTokenEvidence($0, record: record, policy: policy)
+        }
         guard evidence.count == tokens.count else { return }
 
         add(
@@ -245,11 +310,20 @@ public final class AirportSearchEngine: @unchecked Sendable {
         }
     }
 
-    private func bestTokenEvidence(_ token: String, record: SearchableAirport) -> TokenEvidence? {
+    private func bestTokenEvidence(
+        _ token: String,
+        record: SearchableAirport,
+        policy: SearchPolicy
+    ) -> TokenEvidence? {
         let lowerIATA = record.airport.iataCode?.lowercased()
         let lowerICAO = record.airport.icaoCode?.lowercased()
         if token == lowerIATA || token == lowerICAO {
             return TokenEvidence(points: 220, reason: .tokenMatch)
+        }
+        if policy.codePrefixPoints > 0,
+           token.count >= policy.minimumPrefixLength,
+           lowerIATA?.hasPrefix(token) == true || lowerICAO?.hasPrefix(token) == true {
+            return TokenEvidence(points: policy.codePrefixPoints, reason: .codePrefix)
         }
         if record.nameWords.contains(token) {
             return TokenEvidence(points: 150, reason: .tokenMatch)
@@ -267,7 +341,7 @@ public final class AirportSearchEngine: @unchecked Sendable {
             return TokenEvidence(points: 110, reason: .tokenMatch)
         }
 
-        if token.count >= 2 {
+        if token.count >= policy.minimumPrefixLength {
             if record.nameWords.contains(where: { $0.hasPrefix(token) }) {
                 return TokenEvidence(points: 120, reason: .namePrefix)
             }
@@ -279,6 +353,7 @@ public final class AirportSearchEngine: @unchecked Sendable {
             }
         }
 
+        guard policy.allowsFuzzyText else { return nil }
         let allowed = allowedTextEdits(for: token)
         guard allowed > 0 else { return nil }
         if record.nameWords.contains(where: {
@@ -532,9 +607,9 @@ public final class AirportSearchEngine: @unchecked Sendable {
         indexes: inout SearchIndexes
     ) {
         append(airportIndex, to: word, in: &indexes.words)
-        if word.count >= 2 {
+        if !word.isEmpty {
             let characters = Array(word)
-            for length in 2...characters.count {
+            for length in 1...characters.count {
                 append(
                     airportIndex,
                     to: String(characters.prefix(length)),

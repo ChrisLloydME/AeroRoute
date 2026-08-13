@@ -81,3 +81,25 @@ initialization throws. Build and retain one engine rather than recreating it for
 every keystroke: initialization builds the immutable indexes, while subsequent
 searches are synchronous, side-effect free, thread-safe, and perform no network
 access.
+
+## Search as you type
+
+Use `suggestions(for:limit:)` while a search field is being edited:
+
+```swift
+let suggestions = search.suggestions(for: currentText, limit: 8)
+```
+
+The suggestion policy differs intentionally from a submitted `search`:
+
+- one character can recall code, name, city, and alias prefixes;
+- exact and prefix matches are available immediately;
+- fuzzy text matching begins at four characters;
+- fuzzy airport-code correction stays disabled while typing;
+- the default result limit is eight.
+
+This prevents a partially typed real code from being “corrected” to an unrelated
+airport. A UI may debounce calls by roughly 50–100 ms to avoid unnecessary view
+updates, but the engine itself is synchronous and keeps no mutable query state.
+Once the user submits the field, call `search(_:limit:)` to enable the complete
+fuzzy policy.

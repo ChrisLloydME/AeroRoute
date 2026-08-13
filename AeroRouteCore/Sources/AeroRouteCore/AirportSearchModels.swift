@@ -47,6 +47,7 @@ public enum AirportMatchReason: String, Sendable, Equatable, CaseIterable {
     case exactCity
     case namePrefix
     case cityPrefix
+    case codePrefix
     case exactAlias
     case aliasPrefix
     case acronym
