@@ -471,7 +471,9 @@ final class RouteWorkspace: ObservableObject {
         let worker = renderWorker
         exportDocument = nil
         isExporting = true
-        statusMessage = "Preparing PNG…"
+        let pixelWidth = Int((Double(settings.designWidth) * settings.outputScale).rounded())
+        let pixelHeight = Int((Double(settings.designHeight) * settings.outputScale).rounded())
+        statusMessage = "Rendering PNG (\(pixelWidth.formatted()) × \(pixelHeight.formatted()))…"
 
         exportTask = Task { [weak self] in
             let outcome = await worker.renderPNG(
@@ -488,6 +490,7 @@ final class RouteWorkspace: ObservableObject {
             switch outcome {
             case let .success(data, stats):
                 do {
+                    self.statusMessage = "Saving PNG to Photos…"
                     try await PhotoLibraryExporter.save(
                         pngData: data,
                         filename: filename

@@ -67,6 +67,11 @@ struct ContentView: View {
         } message: {
             Text(workspace.alertMessage)
         }
+        .overlay {
+            if workspace.isExporting {
+                ExportProgressView(workspace: workspace)
+            }
+        }
         .onChange(of: workspace.settings) {
             workspace.scheduleRender()
         }
@@ -101,6 +106,26 @@ struct ContentView: View {
         }
         .navigationSplitViewStyle(.balanced)
 #endif
+    }
+}
+
+private struct ExportProgressView: View {
+    @ObservedObject var workspace: RouteWorkspace
+
+    var body: some View {
+        VStack(spacing: 12) {
+            ProgressView()
+                .controlSize(.large)
+            Text(workspace.statusMessage)
+                .font(.headline)
+                .multilineTextAlignment(.center)
+        }
+        .padding(.horizontal, 28)
+        .padding(.vertical, 22)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .shadow(radius: 8)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("export.progress")
     }
 }
 
