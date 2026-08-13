@@ -20,7 +20,7 @@ let package = Package(
         ),
         .testTarget(
             name: "AeroRouteCoreTests",
-            dependencies: ["AeroRouteCore"]
+            dependencies: ["AeroRouteCore", "CSQLite"]
         ),
     ]
 )

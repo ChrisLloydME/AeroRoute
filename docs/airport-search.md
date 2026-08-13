@@ -136,6 +136,30 @@ incremental-prefix, and negative queries executable against the bundled
 database. The typo set includes transposition, insertion, deletion,
 substitution, multi-term errors, and merged phrases.
 
+`AirportSearchEvaluationTests` complements those hand-picked regressions with
+a deterministic corpus selected from every bundled database revision. It
+samples up to two scheduled large or medium airports per country, requires a
+globally distinctive English term, and uses a stable hash order. Each selected
+term is evaluated literally, as an incremental prefix, and with reproducible
+deletion, insertion, substitution, and adjacent-transposition errors. Separate
+code and nonsense corpora test decisive lookup and false-positive rejection.
+
+The 2026-08-13 bundled database produces 1,019 evaluation queries:
+
+| Evaluation slice | Result |
+| --- | ---: |
+| 240 exact IATA/ICAO queries | 240/240 Top-1 |
+| 120 distinctive English terms | 117/120 Top-1 |
+| 475 generated single-edit typos | 440/475 Top-1; 469/475 Top-3 |
+| 120 incremental prefixes | 117/120 Top-8 |
+| 64 deterministic nonsense strings | 64/64 rejected |
+
+The corpus exposed a failure that the original ten typo regressions did not:
+evidence accumulated from several generic prefix fields could outrank an exact
+airport code. Ranking now compares semantic match classes lexicographically
+before comparing additive relevance scores, so exact codes cannot be displaced
+by repeated weaker evidence.
+
 On the same arm64 machine and Release build on 2026-08-13, comparing commit
 `4b7e745` with the optimized implementation using the same test cases:
 
@@ -153,4 +177,5 @@ or field weights:
 ```sh
 cd AeroRouteCore
 swift test -c release --filter AirportSearchQualityTests
+swift test -c release --filter AirportSearchEvaluationTests
 ```

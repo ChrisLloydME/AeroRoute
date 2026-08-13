@@ -379,7 +379,7 @@ public final class AirportSearchEngine: @unchecked Sendable {
             score: &score,
             reasons: &reasons
         )
-        for item in evidence where item.reason != .tokenMatch {
+        for item in evidence {
             if !reasons.contains(item.reason) { reasons.append(item.reason) }
         }
     }
@@ -646,6 +646,9 @@ public final class AirportSearchEngine: @unchecked Sendable {
     }
 
     private func rankedBefore(_ lhs: RankedAirport, _ rhs: RankedAirport) -> Bool {
+        let lhsTier = matchTier(lhs.result.reasons)
+        let rhsTier = matchTier(rhs.result.reasons)
+        if lhsTier != rhsTier { return lhsTier > rhsTier }
         if lhs.result.score != rhs.result.score { return lhs.result.score > rhs.result.score }
         if lhs.result.airport.hasScheduledService != rhs.result.airport.hasScheduledService {
             return lhs.result.airport.hasScheduledService
@@ -658,6 +661,18 @@ public final class AirportSearchEngine: @unchecked Sendable {
             return lhs.result.airport.name < rhs.result.airport.name
         }
         return lhs.result.airport.id < rhs.result.airport.id
+    }
+
+    /// Match classes are lexicographic, not merely additive. A generic prefix
+    /// can accumulate evidence from several duplicated fields, but must never
+    /// outrank a real code or a literal field term.
+    private func matchTier(_ reasons: [AirportMatchReason]) -> Int {
+        if reasons.contains(.exactIATA) || reasons.contains(.exactICAO) { return 6 }
+        if reasons.contains(.exactName) || reasons.contains(.exactAlias) { return 5 }
+        if reasons.contains(.exactCity) { return 4 }
+        if reasons.contains(.tokenMatch) || reasons.contains(.codePrefix) { return 3 }
+        if reasons.contains(.acronym) { return 2 }
+        return 1
     }
 
     private func add(
