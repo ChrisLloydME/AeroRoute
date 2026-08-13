@@ -7,8 +7,6 @@ struct RouteInspector: View {
         Form {
             Section("Labels") {
                 TextField("Title", text: $workspace.settings.title)
-                TextField("Airport Codes", text: $workspace.settings.airportCodes)
-                TextField("Airport Names", text: $workspace.settings.airportNames)
                 TextField("Route Subtitle", text: $workspace.settings.routeSubtitle)
             }
 

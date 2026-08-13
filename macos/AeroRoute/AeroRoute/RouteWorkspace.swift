@@ -52,8 +52,17 @@ struct FlightLegSummary: Identifiable {
     let pointCount: Int
     let origin: String
     let destination: String
+    let originName: String
+    let destinationName: String
     let connection: String
     let connects: Bool
+}
+
+struct AirportLabel: Equatable, Sendable {
+    var code: String
+    var name: String
+
+    static let empty = AirportLabel(code: "", name: "")
 }
 
 enum CompactRouteSection: String, CaseIterable, Identifiable {
@@ -67,6 +76,8 @@ enum CompactRouteSection: String, CaseIterable, Identifiable {
 
 @MainActor
 final class RouteWorkspace: ObservableObject {
+    let airportSearch: AirportSearchStore
+
     @Published var legs: [FlightLegItem] = []
     @Published var selectedLegID: FlightLegItem.ID?
     @Published var settings = WorkspaceRenderSettings()
@@ -103,6 +114,10 @@ final class RouteWorkspace: ObservableObject {
     private var importGeneration = 0
     private var workspaceRevision = 0
     private var loadedCommandLineArguments = false
+
+    init(airportSearch: AirportSearchStore? = nil) {
+        self.airportSearch = airportSearch ?? AirportSearchStore()
+    }
 
     deinit {
         renderTask?.cancel()
@@ -143,11 +158,14 @@ final class RouteWorkspace: ObservableObject {
     }
 
     var legSummaries: [FlightLegSummary] {
-        let codes = csvValues(settings.airportCodes)
+        let codes = waypointValues(settings.airportCodes)
+        let names = waypointValues(settings.airportNames)
         let distances = connectionDistances
         return legs.enumerated().map { index, leg in
-            let origin = codes.indices.contains(index) ? codes[index] : "—"
-            let destination = codes.indices.contains(index + 1) ? codes[index + 1] : "—"
+            let origin = codes.indices.contains(index) ? codes[index] : ""
+            let destination = codes.indices.contains(index + 1) ? codes[index + 1] : ""
+            let originName = names.indices.contains(index) ? names[index] : ""
+            let destinationName = names.indices.contains(index + 1) ? names[index + 1] : ""
             let isLast = index == legs.count - 1
             let distance = distances.indices.contains(index) ? distances[index] : nil
             return FlightLegSummary(
@@ -155,14 +173,41 @@ final class RouteWorkspace: ObservableObject {
                 flightNumber: leg.flightNumber,
                 callsign: leg.callsign.isEmpty ? "—" : leg.callsign,
                 pointCount: leg.pointCount,
-                origin: origin,
-                destination: destination,
+                origin: nonempty(origin) ?? nonempty(originName) ?? "—",
+                destination: nonempty(destination) ?? nonempty(destinationName) ?? "—",
+                originName: originName,
+                destinationName: destinationName,
                 connection: isLast
                     ? "End"
                     : distance.map { String(format: "%.1f km", locale: .posix, $0) } ?? "—",
                 connects: isLast || (distance.map { $0 <= 50 } ?? false)
             )
         }
+    }
+
+    func airportLabels(for legID: FlightLegItem.ID) -> (origin: AirportLabel, destination: AirportLabel)? {
+        guard let index = legs.firstIndex(where: { $0.id == legID }) else { return nil }
+        return (airportLabel(at: index), airportLabel(at: index + 1))
+    }
+
+    func updateAirportLabels(
+        for legID: FlightLegItem.ID,
+        origin: AirportLabel,
+        destination: AirportLabel
+    ) {
+        guard let index = legs.firstIndex(where: { $0.id == legID }) else { return }
+        var codes = waypointValues(settings.airportCodes)
+        var names = waypointValues(settings.airportNames)
+        let requiredCount = max(legs.count + 1, index + 2)
+        codes.append(contentsOf: repeatElement("", count: max(0, requiredCount - codes.count)))
+        names.append(contentsOf: repeatElement("", count: max(0, requiredCount - names.count)))
+        codes[index] = origin.code.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        codes[index + 1] = destination.code.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        names[index] = origin.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        names[index + 1] = destination.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        settings.airportCodes = serializedWaypointValues(codes)
+        settings.airportNames = serializedWaypointValues(names)
+        scheduleRender()
     }
 
     func importURLs(_ urls: [URL]) {
@@ -540,8 +585,8 @@ final class RouteWorkspace: ObservableObject {
             showAirports: settings.showAirportLabels,
             showFlightNumber: settings.showMetadata,
             flightNumber: nonempty(settings.title),
-            waypointCodes: csvValues(settings.airportCodes),
-            waypointNames: csvValues(settings.airportNames),
+            waypointCodes: waypointValues(settings.airportCodes),
+            waypointNames: waypointValues(settings.airportNames),
             routeName: nonempty(settings.routeSubtitle)
         )
     }
@@ -566,10 +611,27 @@ final class RouteWorkspace: ObservableObject {
             + "\(stats.curveSegments.formatted()) cubic segments"
     }
 
-    private func csvValues(_ value: String) -> [String] {
-        value.split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
+    private func waypointValues(_ value: String) -> [String] {
+        guard !value.isEmpty else { return [] }
+        return value.split(
+            separator: ",",
+            omittingEmptySubsequences: false
+        ).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+    }
+
+    private func airportLabel(at index: Int) -> AirportLabel {
+        let codes = waypointValues(settings.airportCodes)
+        let names = waypointValues(settings.airportNames)
+        return AirportLabel(
+            code: codes.indices.contains(index) ? codes[index] : "",
+            name: names.indices.contains(index) ? names[index] : ""
+        )
+    }
+
+    private func serializedWaypointValues(_ values: [String]) -> String {
+        var values = values
+        while values.last == "" { values.removeLast() }
+        return values.joined(separator: ",")
     }
 
     private func nonempty(_ value: String) -> String? {
