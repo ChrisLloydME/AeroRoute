@@ -218,6 +218,22 @@ final class GoldenCompatibilityTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: destination), Data(built.svg.utf8))
     }
 
+    func testFlightFocusedRenderFillsMapViewport() throws {
+        let track = try Self.loadFixtureTrack(Self.fixtures[0])
+        let rendered = try SVGRenderer.buildSVG(
+            track: track,
+            options: RenderOptions(zoomToFlight: true)
+        )
+        let viewport = AeroRouteGeometry.mapViewport(width: 1_600, height: 1_000)
+
+        XCTAssertTrue(rendered.svg.contains("data-map-scope=\"flight\""))
+        XCTAssertGreaterThan(abs(rendered.stats.endXY.x - rendered.stats.startXY.x), 500)
+        XCTAssertGreaterThanOrEqual(rendered.stats.startXY.x, viewport.left)
+        XCTAssertLessThanOrEqual(rendered.stats.startXY.x, viewport.right)
+        XCTAssertGreaterThanOrEqual(rendered.stats.endXY.y, viewport.top)
+        XCTAssertLessThanOrEqual(rendered.stats.endXY.y, viewport.bottom)
+    }
+
     func testOrderedXMLSerializationMatchesElementTreeConventions() {
         let root = OrderedXMLNode(
             "svg",
