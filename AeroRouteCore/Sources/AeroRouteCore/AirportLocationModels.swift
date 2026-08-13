@@ -147,3 +147,32 @@ public struct AirportTrackMatchResponse: Sendable, Equatable {
         destination.automaticSelection
     }
 }
+
+public struct AirportWaypointMatch: Sendable, Equatable, Identifiable {
+    public let pointIndex: Int
+    public let response: AirportProximityResponse
+
+    public var id: Int { pointIndex }
+
+    public init(pointIndex: Int, response: AirportProximityResponse) {
+        self.pointIndex = pointIndex
+        self.response = response
+    }
+}
+
+public struct AirportItineraryMatchResponse: Sendable, Equatable {
+    public let waypoints: [AirportWaypointMatch]
+
+    public init(waypoints: [AirportWaypointMatch]) {
+        self.waypoints = waypoints
+    }
+
+    /// Non-nil only when every waypoint is safe to fill without user input.
+    public var automaticAirports: [Airport]? {
+        guard !waypoints.isEmpty else { return nil }
+        let airports = waypoints.compactMap {
+            $0.response.automaticSelection?.airport
+        }
+        return airports.count == waypoints.count ? airports : nil
+    }
+}

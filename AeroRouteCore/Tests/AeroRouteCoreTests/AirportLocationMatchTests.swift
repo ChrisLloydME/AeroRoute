@@ -87,6 +87,23 @@ struct AirportLocationMatchTests {
         #expect(response.automaticOrigin?.supportingPointCount ?? 0 >= 1)
         #expect(response.automaticDestination?.supportingPointCount ?? 0 >= 1)
     }
+
+    @Test func combinedTrackResolvesEveryAirportInRouteOrder() throws {
+        let filenames = ["lh727.csv", "lh2440.csv", "fi217.csv"]
+        let tracks = try filenames.map {
+            try loadFR24(airportLocationExampleData.appending(path: $0)).track
+        }
+        let itinerary = try combineTracks(tracks: tracks)
+
+        let response = Self.engine.matchAirportWaypoints(for: itinerary)
+
+        #expect(response.waypoints.map(\.pointIndex) == itinerary.waypointIndices)
+        #expect(response.waypoints.map {
+            $0.response.candidates.first?.airport.iataCode
+        } == ["PVG", "MUC", "CPH", "KEF"])
+        #expect(response.automaticAirports?.compactMap(\.iataCode)
+            == ["PVG", "MUC", "CPH", "KEF"])
+    }
 }
 
 private let airportTrackFixtures: [(String, String, String)] = [
