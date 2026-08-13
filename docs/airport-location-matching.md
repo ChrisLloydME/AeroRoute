@@ -7,11 +7,12 @@ fill a value automatically.
 
 ## Matching policy
 
-The matcher uses exact WGS84 great-circle distance. Scanning the roughly ten
-thousand bundled airports is intentionally preferred to a spatial tree at the
-current catalog size: it keeps the implementation and update pipeline simple,
-while a warm query remains fast enough for import-time matching. A spatial
-index can be introduced behind the same API if the catalog or workload grows.
+The matcher uses exact WGS84 great-circle distance. It keeps precomputed airport
+coordinates in radians and rejects airports outside the query's latitude band
+before evaluating the more expensive Haversine expression. Scanning the roughly
+ten thousand lightweight records is intentionally preferred to a spatial tree
+at the current catalog size; a spatial index can still be introduced behind the
+same API if the catalog or workload grows.
 
 Physical distance is the primary signal. The ranker applies only small,
 bounded tie-break bonuses:
@@ -33,9 +34,14 @@ and low confidence beyond 25 km. Automatic selection additionally requires:
 3. at least a 2 km adjusted lead over the runner-up, increasing to 75% of the
    endpoint distance when the first candidate is farther away.
 
+The automatic-selection decision always evaluates at least a 25 km ambiguity
+horizon and is independent of the caller's visible result `limit`. Requesting
+one result, or using a narrow display radius, therefore cannot hide a nearby
+runner-up and turn an ambiguous result into an automatic fill.
+
 Otherwise the response is `.manualSelection` and retains the ranked candidates
-for user correction. Invalid coordinates and a valid coordinate with no airport
-inside the search radius are distinct states.
+for user correction. Invalid coordinates, invalid request/options, and a valid
+coordinate with no airport inside the search radius are distinct states.
 
 ## APIs
 
@@ -62,8 +68,11 @@ let destination = response.automaticDestination?.airport
 ```
 
 The matcher samples at most 64 observations from the first and last ten
-minutes. This resists a noisy individual coordinate while keeping cost bounded.
-The values are configurable through `AirportTrackMatchOptions`.
+minutes. It reads only the relevant prefix and suffix of an ordered track rather
+than filtering the entire flight twice. This resists a noisy individual
+coordinate while keeping cost bounded. The values are configurable through
+`AirportTrackMatchOptions`; non-finite or negative distance/time settings are
+rejected as `.invalidRequest` and never produce an automatic selection.
 
 For multiple CSV files:
 
@@ -96,10 +105,12 @@ The stable location-matching types are:
 
 ## Regression coverage
 
-`AirportLocationMatchTests` verifies invalid and remote coordinates, exact
-coordinate lookup, an intentionally ambiguous midpoint, all seven bundled
-Flightradar24 examples, and a deliberately non-contiguous three-file batch. The
-example tracks currently resolve as:
+`AirportLocationMatchTests` and `AirportLocationEdgeCaseTests` verify invalid
+and remote coordinates, invalid options, result-limit invariance, hidden nearby
+competitors, closed latitude/longitude bounds, the antimeridian, the poles, an
+intentionally ambiguous midpoint, all seven bundled Flightradar24 examples,
+and a deliberately non-contiguous three-file batch. The example tracks
+currently resolve as:
 
 | File | Expected route |
 | --- | --- |

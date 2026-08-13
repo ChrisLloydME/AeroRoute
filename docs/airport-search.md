@@ -26,6 +26,13 @@ For example, `✈️ＰＶＧ🛬` becomes the code `PVG`, and `São—Paulo` be
 terms `sao paulo`. Chinese `上海` has no English search terms and returns no
 result by design.
 
+Repeated search terms are deduplicated before recall and scoring, so pasted or
+repeated text cannot manufacture relevance. Inputs larger than 1,024 UTF-8
+bytes, more than 16 meaningful terms, or a meaningful term larger than 64 bytes
+fail closed with no matches. These bounds are far beyond the intended keyword
+interface and prevent pathological text from allocating oversized fuzzy-match
+work buffers.
+
 ## Recall and ranking
 
 The engine builds in-memory posting lists over names, cities, countries, codes,
