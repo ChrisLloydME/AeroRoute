@@ -58,6 +58,62 @@ final class AeroRouteTests: XCTestCase {
     }
 
     @MainActor
+    func testAirportLabelsCanBeEditedFromTheirCSVLeg() async throws {
+        let workspace = RouteWorkspace()
+        workspace.importURLs([
+            example("sk2596.csv"),
+            example("lx1279.csv"),
+        ])
+        try await waitForIdle(workspace)
+
+        let firstLeg = try XCTUnwrap(workspace.legs.first?.id)
+        let secondLeg = try XCTUnwrap(workspace.legs.last?.id)
+        workspace.updateAirportLabels(
+            for: firstLeg,
+            origin: AirportLabel(code: "kef", name: "Keflavik"),
+            destination: AirportLabel(code: "cph", name: "Copenhagen")
+        )
+        workspace.updateAirportLabels(
+            for: secondLeg,
+            origin: AirportLabel(code: "cph", name: "Copenhagen"),
+            destination: AirportLabel(code: "zrh", name: "Zurich")
+        )
+        try await waitForIdle(workspace)
+
+        XCTAssertEqual(workspace.settings.airportCodes, "KEF,CPH,ZRH")
+        XCTAssertEqual(workspace.settings.airportNames, "Keflavik,Copenhagen,Zurich")
+        XCTAssertEqual(workspace.legSummaries.map(\.origin), ["KEF", "CPH"])
+        XCTAssertEqual(workspace.legSummaries.map(\.destination), ["CPH", "ZRH"])
+        XCTAssertEqual(workspace.airportLabels(for: secondLeg)?.origin.name, "Copenhagen")
+        XCTAssertTrue(workspace.previewSVG?.contains("CPH · Copenhagen") == true)
+    }
+
+    @MainActor
+    func testAirportLabelEditingPreservesEmptyWaypointPositions() async throws {
+        let workspace = RouteWorkspace()
+        workspace.importURLs([
+            example("sk2596.csv"),
+            example("lx1279.csv"),
+        ])
+        try await waitForIdle(workspace)
+
+        let secondLeg = try XCTUnwrap(workspace.legs.last?.id)
+        workspace.updateAirportLabels(
+            for: secondLeg,
+            origin: .empty,
+            destination: AirportLabel(code: "zrh", name: "Zurich")
+        )
+        try await waitForIdle(workspace)
+
+        XCTAssertEqual(workspace.settings.airportCodes, ",,ZRH")
+        XCTAssertEqual(workspace.legSummaries[0].origin, "—")
+        XCTAssertEqual(workspace.legSummaries[0].destination, "—")
+        XCTAssertEqual(workspace.legSummaries[1].origin, "—")
+        XCTAssertEqual(workspace.legSummaries[1].destination, "ZRH")
+        XCTAssertTrue(workspace.previewSVG?.contains("ZRH · Zurich") == true)
+    }
+
+    @MainActor
     func testDisconnectedLegsExposeExactValidationError() async throws {
         let workspace = RouteWorkspace()
         workspace.importURLs([

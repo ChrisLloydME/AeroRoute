@@ -102,18 +102,25 @@ private struct RouteMapPane: View {
 
 private struct FlightLegList: View {
     @ObservedObject var workspace: RouteWorkspace
+    @State private var editedLeg: FlightLegSummary?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Flight Information")
-                .font(.headline)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+            HStack(alignment: .firstTextBaseline) {
+                Text("Flight Information")
+                    .font(.headline)
+                Spacer()
+                Text("Double-click a CSV row to edit airport labels")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
 
             HStack(spacing: 12) {
                 Text("Flight")
                     .frame(maxWidth: .infinity, alignment: .leading)
-                Text("Route")
+                Text("Airports")
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Text("Points")
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -139,7 +146,14 @@ private struct FlightLegList: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                    Text("\(row.origin) → \(row.destination)")
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("\(row.origin) → \(row.destination)")
+                        if !row.originName.isEmpty || !row.destinationName.isEmpty {
+                            Text("\(row.originName.isEmpty ? "—" : row.originName) → \(row.destinationName.isEmpty ? "—" : row.destinationName)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                         .frame(maxWidth: .infinity, alignment: .leading)
 
                     Text(row.pointCount.formatted())
@@ -157,10 +171,83 @@ private struct FlightLegList: View {
                 }
                 .lineLimit(1)
                 .tag(row.id)
+                .contentShape(Rectangle())
+                .onTapGesture(count: 2) {
+                    editedLeg = row
+                }
+                .contextMenu {
+                    Button("Edit Airport Labels…") {
+                        editedLeg = row
+                    }
+                }
                 .accessibilityElement(children: .combine)
             }
         }
         .accessibilityIdentifier("route.legTable")
+        .sheet(item: $editedLeg) { row in
+            AirportLabelsEditor(workspace: workspace, leg: row)
+#if os(macOS)
+                .frame(minWidth: 440, minHeight: 300)
+#endif
+        }
+    }
+}
+
+private struct AirportLabelsEditor: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var workspace: RouteWorkspace
+    let leg: FlightLegSummary
+
+    @State private var originCode: String
+    @State private var originName: String
+    @State private var destinationCode: String
+    @State private var destinationName: String
+
+    init(workspace: RouteWorkspace, leg: FlightLegSummary) {
+        self.workspace = workspace
+        self.leg = leg
+        let labels = workspace.airportLabels(for: leg.id)
+        _originCode = State(initialValue: labels?.origin.code ?? "")
+        _originName = State(initialValue: labels?.origin.name ?? "")
+        _destinationCode = State(initialValue: labels?.destination.code ?? "")
+        _destinationName = State(initialValue: labels?.destination.name ?? "")
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Origin") {
+                    TextField("Airport Code", text: $originCode)
+                    TextField("Airport Name", text: $originName)
+                }
+
+                Section("Destination") {
+                    TextField("Airport Code", text: $destinationCode)
+                    TextField("Airport Name", text: $destinationName)
+                }
+            }
+            .formStyle(.grouped)
+            .navigationTitle("\(leg.flightNumber) Airport Labels")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        workspace.updateAirportLabels(
+                            for: leg.id,
+                            origin: AirportLabel(code: originCode, name: originName),
+                            destination: AirportLabel(
+                                code: destinationCode,
+                                name: destinationName
+                            )
+                        )
+                        dismiss()
+                    }
+                    .keyboardShortcut(.defaultAction)
+                }
+            }
+        }
     }
 }
 
