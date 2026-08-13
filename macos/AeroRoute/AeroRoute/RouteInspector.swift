@@ -15,6 +15,8 @@ struct RouteInspector: View {
                 Toggle("Country Labels", isOn: $workspace.settings.showCountryLabels)
                 Toggle("Airport Labels", isOn: $workspace.settings.showAirportLabels)
                 Toggle("Flight Metadata", isOn: $workspace.settings.showMetadata)
+                Toggle("Zoom to Flight", isOn: $workspace.settings.zoomToFlight)
+                    .accessibilityIdentifier("route.zoomToFlight")
             }
 
             Section("Output") {

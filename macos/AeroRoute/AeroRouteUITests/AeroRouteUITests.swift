@@ -23,6 +23,14 @@ final class AeroRouteUITests: XCTestCase {
     }
 
     @MainActor
+    func testInspectorOffersZoomToFlightToggle() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        XCTAssertTrue(app.switches["route.zoomToFlight"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
     func testExampleItineraryIsReadyForExport() throws {
         let app = XCUIApplication()
         app.launchArguments = [
