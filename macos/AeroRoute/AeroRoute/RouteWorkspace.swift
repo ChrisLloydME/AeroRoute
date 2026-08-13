@@ -14,6 +14,7 @@ struct WorkspaceRenderSettings: Equatable, Sendable {
     var showAirportLabels = true
     var showMetadata = true
     var fitMapToRoute = false
+    var centerRouteOnWorldMap = false
 
     var designWidth = 1600
     var designHeight = 1000
@@ -586,6 +587,7 @@ final class RouteWorkspace: ObservableObject {
             showAirports: settings.showAirportLabels,
             showFlightNumber: settings.showMetadata,
             fitMapToRoute: settings.fitMapToRoute,
+            centerRouteOnWorldMap: settings.centerRouteOnWorldMap,
             flightNumber: nonempty(settings.title),
             waypointCodes: waypointValues(settings.airportCodes),
             waypointNames: waypointValues(settings.airportNames),
