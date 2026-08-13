@@ -12,6 +12,10 @@ public final class AirportSearchEngine: @unchecked Sendable {
         let cityWords: Set<String>
         let countryWords: Set<String>
         let aliasWords: Set<String>
+        let nameCompact: String
+        let cityCompact: String
+        let countryCompact: String
+        let aliasCompacts: [String]
         let compactFields: Set<String>
         let acronyms: Set<String>
     }
@@ -31,12 +35,14 @@ public final class AirportSearchEngine: @unchecked Sendable {
         let codePrefixPoints: Int
         let allowsFuzzyText: Bool
         let allowsFuzzyCode: Bool
+        let candidateBudget: Int?
 
         static let submitted = SearchPolicy(
             minimumPrefixLength: 2,
             codePrefixPoints: 0,
             allowsFuzzyText: true,
-            allowsFuzzyCode: true
+            allowsFuzzyCode: true,
+            candidateBudget: nil
         )
 
         static func suggestions(for query: NormalizedAirportQuery) -> SearchPolicy {
@@ -44,17 +50,26 @@ public final class AirportSearchEngine: @unchecked Sendable {
                 minimumPrefixLength: 1,
                 codePrefixPoints: 720,
                 allowsFuzzyText: query.compact.count >= 4,
-                allowsFuzzyCode: false
+                allowsFuzzyCode: false,
+                candidateBudget: query.compact.count <= 2 ? 512 : nil
             )
         }
     }
 
     private struct SearchIndexes: Sendable {
+        struct IndexedTerm: Sendable {
+            let value: String
+            let bytes: [UInt8]
+            let characterMask: UInt32
+        }
+
         var words: [String: [Int]] = [:]
-        var prefixes: [String: [Int]] = [:]
         var codes: [String: [Int]] = [:]
         var acronyms: [String: [Int]] = [:]
-        var trigrams: [String: [Int]] = [:]
+        var compactFields: [String: [Int]] = [:]
+        var orderedWords: [String] = []
+        var wordsByLength: [Int: [IndexedTerm]] = [:]
+        var compactFieldsByLength: [Int: [IndexedTerm]] = [:]
         var knownCodes: Set<String> = []
     }
 
@@ -114,8 +129,14 @@ public final class AirportSearchEngine: @unchecked Sendable {
         let permitFuzzyCode = query.fuzzyCodeCandidate.map {
             policy.allowsFuzzyCode && !indexes.knownCodes.contains($0)
         } ?? false
-        let candidates = candidateIndices(for: query, permitFuzzyCode: permitFuzzyCode)
-        let ranked = candidates.compactMap { index -> RankedAirport? in
+        let candidates = candidateIndices(
+            for: query,
+            permitFuzzyCode: permitFuzzyCode,
+            policy: policy
+        )
+        var ranked: [RankedAirport] = []
+        ranked.reserveCapacity(candidates.count)
+        for index in candidates {
             let record = airports[index]
             guard let result = score(
                 record,
@@ -123,10 +144,13 @@ public final class AirportSearchEngine: @unchecked Sendable {
                 permitFuzzyCode: permitFuzzyCode,
                 policy: policy
             )
-            else { return nil }
-            return RankedAirport(result: result, typeRank: airportTypeRank(record.airport.type))
+            else { continue }
+            ranked.append(RankedAirport(
+                result: result,
+                typeRank: airportTypeRank(record.airport.type)
+            ))
         }
-        .sorted(by: rankedBefore)
+        ranked.sort(by: rankedBefore)
 
         guard let first = ranked.first else { return [] }
         let ambiguous = queryIsAmbiguous(ranked)
@@ -153,11 +177,15 @@ public final class AirportSearchEngine: @unchecked Sendable {
 
     private func candidateIndices(
         for query: NormalizedAirportQuery,
-        permitFuzzyCode: Bool
+        permitFuzzyCode: Bool,
+        policy: SearchPolicy
     ) -> [Int] {
         var candidates: Set<Int> = []
+        var protectedCandidates: Set<Int> = []
         for code in query.codeCandidates {
-            candidates.formUnion(indexes.codes[code] ?? [])
+            let matches = indexes.codes[code] ?? []
+            candidates.formUnion(matches)
+            protectedCandidates.formUnion(matches)
         }
         if permitFuzzyCode, let code = query.fuzzyCodeCandidate {
             for knownCode in indexes.knownCodes where knownCode.count == code.count {
@@ -169,10 +197,18 @@ public final class AirportSearchEngine: @unchecked Sendable {
         var tokenCandidates: Set<Int>?
         for token in query.significantTokens {
             var matches = Set(indexes.words[token] ?? [])
-            matches.formUnion(indexes.prefixes[token] ?? [])
-            if token.count >= 4 {
-                for trigram in trigrams(token) {
-                    matches.formUnion(indexes.trigrams[trigram] ?? [])
+            if token.count >= policy.minimumPrefixLength {
+                for term in terms(withPrefix: token, in: indexes.orderedWords) {
+                    matches.formUnion(indexes.words[term] ?? [])
+                }
+            }
+            if policy.allowsFuzzyText, allowedTextEdits(for: token) > 0 {
+                for term in fuzzyTerms(
+                    matching: token,
+                    in: indexes.wordsByLength,
+                    limit: allowedTextEdits(for: token)
+                ) where term != token {
+                    matches.formUnion(indexes.words[term] ?? [])
                 }
             }
             if let current = tokenCandidates {
@@ -182,11 +218,36 @@ public final class AirportSearchEngine: @unchecked Sendable {
             }
         }
         candidates.formUnion(tokenCandidates ?? [])
-        candidates.formUnion(indexes.acronyms[query.compact] ?? [])
-        if query.significantTokens.count <= 1, query.compact.count >= 5 {
-            for trigram in trigrams(query.compact) {
-                candidates.formUnion(indexes.trigrams[trigram] ?? [])
+        let acronymMatches = indexes.acronyms[query.compact] ?? []
+        candidates.formUnion(acronymMatches)
+        protectedCandidates.formUnion(acronymMatches)
+        let compactMatches = indexes.compactFields[query.compact] ?? []
+        candidates.formUnion(compactMatches)
+        protectedCandidates.formUnion(compactMatches)
+
+        // Compact-field correction is the expensive fallback for merged phrases
+        // such as "sanfransisco". Shorter inputs are already covered by word lookup.
+        if policy.allowsFuzzyText, query.compact.count >= 10 {
+            for compact in fuzzyTerms(
+                matching: query.compact,
+                in: indexes.compactFieldsByLength,
+                limit: allowedPhraseEdits(for: query.compact)
+            ) {
+                candidates.formUnion(indexes.compactFields[compact] ?? [])
             }
+        }
+
+        if let budget = policy.candidateBudget, candidates.count > budget {
+            let remaining = candidates.subtracting(protectedCandidates)
+                .sorted {
+                    let lhsPriority = candidatePriority($0)
+                    let rhsPriority = candidatePriority($1)
+                    return lhsPriority == rhsPriority
+                        ? airports[$0].airport.id < airports[$1].airport.id
+                        : lhsPriority > rhsPriority
+                }
+            candidates = protectedCandidates
+            candidates.formUnion(remaining.prefix(max(0, budget - candidates.count)))
         }
         return candidates.sorted()
     }
@@ -220,11 +281,24 @@ public final class AirportSearchEngine: @unchecked Sendable {
             reasons: &reasons
         )
 
-        if score == 0, policy.allowsFuzzyText || permitFuzzyCode {
+        let hasDecisiveExactMatch = reasons.contains(.exactIATA)
+            || reasons.contains(.exactICAO)
+            || reasons.contains(.exactName)
+            || reasons.contains(.exactCity)
+            || reasons.contains(.exactAlias)
+        if !hasDecisiveExactMatch, policy.allowsFuzzyText {
             addFuzzyPhraseEvidence(
                 record,
+                compactQuery: query.compact,
+                score: &score,
+                reasons: &reasons
+            )
+        }
+
+        if score == 0, permitFuzzyCode {
+            addFuzzyCodeEvidence(
+                record,
                 query: query,
-                permitFuzzyCode: permitFuzzyCode,
                 score: &score,
                 reasons: &reasons
             )
@@ -326,62 +400,99 @@ public final class AirportSearchEngine: @unchecked Sendable {
             return TokenEvidence(points: policy.codePrefixPoints, reason: .codePrefix)
         }
         if record.nameWords.contains(token) {
-            return TokenEvidence(points: 150, reason: .tokenMatch)
+            return TokenEvidence(points: 150 + idfPoints(for: token), reason: .tokenMatch)
         }
         if record.aliasWords.contains(token) {
-            return TokenEvidence(points: 145, reason: .tokenMatch)
+            return TokenEvidence(points: 145 + idfPoints(for: token), reason: .tokenMatch)
         }
         if record.cityWords.contains(token) {
-            return TokenEvidence(points: 140, reason: .tokenMatch)
+            return TokenEvidence(points: 140 + idfPoints(for: token), reason: .tokenMatch)
         }
         if token == record.airport.countryCode.lowercased() {
             return TokenEvidence(points: 135, reason: .tokenMatch)
         }
         if record.countryWords.contains(token) {
-            return TokenEvidence(points: 110, reason: .tokenMatch)
+            return TokenEvidence(points: 110 + idfPoints(for: token), reason: .tokenMatch)
         }
 
         if token.count >= policy.minimumPrefixLength {
-            if record.nameWords.contains(where: { $0.hasPrefix(token) }) {
-                return TokenEvidence(points: 120, reason: .namePrefix)
+            if let term = bestPrefix(of: token, in: record.nameWords) {
+                return TokenEvidence(
+                    points: 120 + idfPoints(for: term),
+                    reason: .namePrefix
+                )
             }
-            if record.aliasWords.contains(where: { $0.hasPrefix(token) }) {
-                return TokenEvidence(points: 115, reason: .aliasPrefix)
+            if let term = bestPrefix(of: token, in: record.aliasWords) {
+                return TokenEvidence(
+                    points: 115 + idfPoints(for: term),
+                    reason: .aliasPrefix
+                )
             }
-            if record.cityWords.contains(where: { $0.hasPrefix(token) }) {
-                return TokenEvidence(points: 110, reason: .cityPrefix)
+            if let term = bestPrefix(of: token, in: record.cityWords) {
+                return TokenEvidence(
+                    points: 110 + idfPoints(for: term),
+                    reason: .cityPrefix
+                )
             }
         }
 
         guard policy.allowsFuzzyText else { return nil }
         let allowed = allowedTextEdits(for: token)
         guard allowed > 0 else { return nil }
-        if record.nameWords.contains(where: {
-            airportEditDistance(token, $0, limit: allowed) <= allowed
-        }) {
-            return TokenEvidence(points: 88, reason: .fuzzyName)
+        if let term = bestFuzzyTerm(for: token, in: record.nameWords, limit: allowed) {
+            return TokenEvidence(
+                points: 110 + idfPoints(for: term),
+                reason: .fuzzyName
+            )
         }
-        if record.aliasWords.contains(where: {
-            airportEditDistance(token, $0, limit: allowed) <= allowed
-        }) {
-            return TokenEvidence(points: 84, reason: .fuzzyAlias)
+        if let term = bestFuzzyTerm(for: token, in: record.aliasWords, limit: allowed) {
+            return TokenEvidence(
+                points: 65 + idfPoints(for: term),
+                reason: .fuzzyAlias
+            )
         }
-        if record.cityWords.contains(where: {
-            airportEditDistance(token, $0, limit: allowed) <= allowed
-        }) {
-            return TokenEvidence(points: 80, reason: .fuzzyCity)
+        if let term = bestFuzzyTerm(for: token, in: record.cityWords, limit: allowed) {
+            return TokenEvidence(
+                points: 115 + idfPoints(for: term),
+                reason: .fuzzyCity
+            )
         }
         return nil
     }
 
     private func addFuzzyPhraseEvidence(
         _ record: SearchableAirport,
-        query: NormalizedAirportQuery,
-        permitFuzzyCode: Bool,
+        compactQuery: String,
         score: inout Int,
         reasons: inout [AirportMatchReason]
     ) {
-        if permitFuzzyCode, let code = query.fuzzyCodeCandidate {
+        let allowed = allowedPhraseEdits(for: compactQuery)
+        guard allowed > 0 else { return }
+        var best = 0.0
+        let fields: [(String, Double)] = [
+            (record.cityCompact, 1.08),
+            (record.nameCompact, 1.0),
+            (record.countryCompact, 0.72),
+        ] + record.aliasCompacts.map { ($0, 0.96) }
+
+        for (field, weight) in fields where !field.isEmpty {
+            guard abs(field.utf8.count - compactQuery.utf8.count) <= allowed else { continue }
+            let distance = airportEditDistance(compactQuery, field, limit: allowed)
+            guard distance <= allowed else { continue }
+            let similarity = 1 - Double(distance) / Double(max(field.utf8.count, 1))
+            best = max(best, similarity * weight)
+        }
+        guard best >= 0.72 else { return }
+        add(360 + Int(min(best, 1.0) * 320), .fuzzyPhrase, score: &score, reasons: &reasons)
+    }
+
+    private func addFuzzyCodeEvidence(
+        _ record: SearchableAirport,
+        query: NormalizedAirportQuery,
+        score: inout Int,
+        reasons: inout [AirportMatchReason]
+    ) {
+        if let code = query.fuzzyCodeCandidate {
             let codes = [record.airport.iataCode, record.airport.icaoCode].compactMap { $0 }
             if codes.contains(where: {
                 $0.count == code.count && airportEditDistance(code, $0, limit: 1) == 1
@@ -389,16 +500,122 @@ public final class AirportSearchEngine: @unchecked Sendable {
                 add(540, .fuzzyCode, score: &score, reasons: &reasons)
             }
         }
+    }
 
-        guard query.compact.count >= 5 else { return }
-        let similarities = record.compactFields.map { trigramSimilarity(query.compact, $0) }
-        guard let similarity = similarities.max(), similarity >= 0.58 else { return }
-        add(
-            430 + Int(similarity * 180),
-            .fuzzyPhrase,
-            score: &score,
-            reasons: &reasons
+    private func idfPoints(for term: String) -> Int {
+        guard let documentFrequency = indexes.words[term]?.count,
+              documentFrequency > 0 else { return 0 }
+        let total = Double(airports.count)
+        let frequency = Double(documentFrequency)
+        let inverseDocumentFrequency = log(
+            1 + (total - frequency + 0.5) / (frequency + 0.5)
         )
+        return min(80, Int(inverseDocumentFrequency * 10))
+    }
+
+    private func bestPrefix(of prefix: String, in words: Set<String>) -> String? {
+        words.lazy
+            .filter { $0.hasPrefix(prefix) }
+            .max {
+                let lhsPoints = idfPoints(for: $0)
+                let rhsPoints = idfPoints(for: $1)
+                return lhsPoints == rhsPoints ? $0 > $1 : lhsPoints < rhsPoints
+            }
+    }
+
+    private func bestFuzzyTerm(
+        for token: String,
+        in words: Set<String>,
+        limit: Int
+    ) -> String? {
+        var best: (term: String, distance: Int, idf: Int)?
+        for word in words where abs(word.utf8.count - token.utf8.count) <= limit {
+            let distance = airportEditDistance(token, word, limit: limit)
+            guard distance <= limit else { continue }
+            let candidate = (word, distance, idfPoints(for: word))
+            if let current = best {
+                if candidate.1 < current.distance
+                    || candidate.1 == current.distance && candidate.2 > current.idf
+                    || candidate.1 == current.distance && candidate.2 == current.idf
+                        && candidate.0 < current.term {
+                    best = candidate
+                }
+            } else {
+                best = candidate
+            }
+        }
+        return best?.term
+    }
+
+    private func terms(withPrefix prefix: String, in terms: [String]) -> ArraySlice<String> {
+        let start = lowerBound(of: prefix, in: terms)
+        var end = start
+        while end < terms.count, terms[end].hasPrefix(prefix) { end += 1 }
+        return terms[start..<end]
+    }
+
+    private func lowerBound(of value: String, in values: [String]) -> Int {
+        var lower = 0
+        var upper = values.count
+        while lower < upper {
+            let middle = lower + (upper - lower) / 2
+            if values[middle] < value {
+                lower = middle + 1
+            } else {
+                upper = middle
+            }
+        }
+        return lower
+    }
+
+    private func fuzzyTerms(
+        matching query: String,
+        in termsByLength: [Int: [SearchIndexes.IndexedTerm]],
+        limit: Int
+    ) -> [String] {
+        guard limit > 0 else { return [] }
+        let queryBytes = Array(query.utf8)
+        let queryMask = characterMask(queryBytes)
+        let queryTrigrams = trigramHashes(queryBytes)
+        let minimumSharedTrigrams = max(0, queryTrigrams.count - 4 * limit)
+        var rows = DistanceRows(capacity: queryBytes.count + limit + 1)
+        var matches: [(String, Int)] = []
+
+        let minimumLength = max(1, queryBytes.count - limit)
+        let maximumLength = queryBytes.count + limit
+        for length in minimumLength...maximumLength {
+            guard let terms = termsByLength[length] else { continue }
+            for term in terms {
+                let missingCharacters = queryMask & ~term.characterMask
+                guard missingCharacters.nonzeroBitCount <= limit else { continue }
+                if minimumSharedTrigrams > 0,
+                   sharedTrigramCount(term.bytes, queryTrigrams) < minimumSharedTrigrams {
+                    continue
+                }
+                let distance = boundedAirportEditDistance(
+                    queryBytes,
+                    term.bytes,
+                    limit: limit,
+                    rows: &rows
+                )
+                if distance <= limit { matches.append((term.value, distance)) }
+            }
+        }
+
+        matches.sort {
+            if $0.1 != $1.1 { return $0.1 < $1.1 }
+            let lhsIDF = idfPoints(for: $0.0)
+            let rhsIDF = idfPoints(for: $1.0)
+            return lhsIDF == rhsIDF ? $0.0 < $1.0 : lhsIDF > rhsIDF
+        }
+        return matches.map(\.0)
+    }
+
+    private func candidatePriority(_ index: Int) -> Int {
+        let airport = airports[index].airport
+        return (airport.hasScheduledService ? 100 : 0)
+            + airportTypeRank(airport.type) * 10
+            + (airport.iataCode == nil ? 0 : 5)
     }
 
     private func queryIsAmbiguous(_ ranked: [RankedAirport]) -> Bool {
@@ -550,8 +767,14 @@ public final class AirportSearchEngine: @unchecked Sendable {
         let cityWords = words(city)
         let countryWords = words(country)
         let aliasWords = Set(aliases.flatMap { words($0) })
+        let nameCompact = queryCompact(name)
+        let cityCompact = queryCompact(city)
+        let countryCompact = queryCompact(country)
+        let aliasCompacts = aliases.map(queryCompact).filter { !$0.isEmpty }
         let fields = [name, city, country] + aliases
-        let compactFields = Set(fields.map(queryCompact).filter { !$0.isEmpty })
+        let compactFields = Set(
+            ([nameCompact, cityCompact, countryCompact] + aliasCompacts).filter { !$0.isEmpty }
+        )
         let acronyms = Set(fields.compactMap(makeAcronym).filter { $0.count >= 2 })
 
         return SearchableAirport(
@@ -564,6 +787,10 @@ public final class AirportSearchEngine: @unchecked Sendable {
             cityWords: cityWords,
             countryWords: countryWords,
             aliasWords: aliasWords,
+            nameCompact: nameCompact,
+            cityCompact: cityCompact,
+            countryCompact: countryCompact,
+            aliasCompacts: aliasCompacts,
             compactFields: compactFields,
             acronyms: acronyms
         )
@@ -593,12 +820,31 @@ public final class AirportSearchEngine: @unchecked Sendable {
                 append(index, to: acronym, in: &indexes.acronyms)
             }
             for compact in record.compactFields {
-                for trigram in trigrams(compact) {
-                    append(index, to: trigram, in: &indexes.trigrams)
-                }
+                append(index, to: compact, in: &indexes.compactFields)
             }
         }
+        indexes.orderedWords = indexes.words.keys.sorted()
+        indexes.wordsByLength = makeLengthIndex(indexes.words.keys)
+        indexes.compactFieldsByLength = makeLengthIndex(indexes.compactFields.keys)
         return indexes
+    }
+
+    private static func makeLengthIndex(
+        _ values: Dictionary<String, [Int]>.Keys
+    ) -> [Int: [SearchIndexes.IndexedTerm]] {
+        var result: [Int: [SearchIndexes.IndexedTerm]] = [:]
+        for value in values {
+            let bytes = Array(value.utf8)
+            result[bytes.count, default: []].append(SearchIndexes.IndexedTerm(
+                value: value,
+                bytes: bytes,
+                characterMask: characterMask(bytes)
+            ))
+        }
+        for length in result.keys {
+            result[length]?.sort { $0.value < $1.value }
+        }
+        return result
     }
 
     private static func indexWord(
@@ -607,19 +853,6 @@ public final class AirportSearchEngine: @unchecked Sendable {
         indexes: inout SearchIndexes
     ) {
         append(airportIndex, to: word, in: &indexes.words)
-        if !word.isEmpty {
-            let characters = Array(word)
-            for length in 1...characters.count {
-                append(
-                    airportIndex,
-                    to: String(characters.prefix(length)),
-                    in: &indexes.prefixes
-                )
-            }
-        }
-        for trigram in trigrams(word) {
-            append(airportIndex, to: trigram, in: &indexes.trigrams)
-        }
     }
 
     private static func append(
@@ -662,53 +895,110 @@ private func allowedTextEdits(for word: String) -> Int {
     return 0
 }
 
+private func allowedPhraseEdits(for value: String) -> Int {
+    if value.utf8.count >= 13 { return 3 }
+    if value.utf8.count >= 8 { return 2 }
+    if value.utf8.count >= 4 { return 1 }
+    return 0
+}
+
+private struct DistanceRows {
+    var previousPrevious: [Int]
+    var previous: [Int]
+    var current: [Int]
+
+    init(capacity: Int) {
+        previousPrevious = Array(repeating: 0, count: capacity)
+        previous = Array(repeating: 0, count: capacity)
+        current = Array(repeating: 0, count: capacity)
+    }
+
+    mutating func ensureCapacity(_ capacity: Int) {
+        guard previous.count < capacity else { return }
+        previousPrevious = Array(repeating: 0, count: capacity)
+        previous = Array(repeating: 0, count: capacity)
+        current = Array(repeating: 0, count: capacity)
+    }
+}
+
 func airportEditDistance(_ lhs: String, _ rhs: String, limit: Int) -> Int {
     if lhs == rhs { return 0 }
-    let left = Array(lhs)
-    let right = Array(rhs)
-    if abs(left.count - right.count) > limit { return limit + 1 }
+    let left = Array(lhs.utf8)
+    let right = Array(rhs.utf8)
+    var rows = DistanceRows(capacity: right.count + 1)
+    return boundedAirportEditDistance(left, right, limit: limit, rows: &rows)
+}
 
-    var matrix = Array(
-        repeating: Array(repeating: 0, count: right.count + 1),
-        count: left.count + 1
-    )
-    for index in 0...left.count { matrix[index][0] = index }
-    for index in 0...right.count { matrix[0][index] = index }
+private func boundedAirportEditDistance(
+    _ left: [UInt8],
+    _ right: [UInt8],
+    limit: Int,
+    rows: inout DistanceRows
+) -> Int {
+    if left == right { return 0 }
+    if abs(left.count - right.count) > limit { return limit + 1 }
+    if left.isEmpty { return min(right.count, limit + 1) }
+    if right.isEmpty { return min(left.count, limit + 1) }
+
+    rows.ensureCapacity(right.count + 1)
+    for index in 0...right.count {
+        rows.previousPrevious[index] = index
+        rows.previous[index] = index
+        rows.current[index] = limit + 1
+    }
 
     for leftIndex in 1...left.count {
+        rows.current[0] = leftIndex
         var rowMinimum = limit + 1
         for rightIndex in 1...right.count {
-            let substitution = matrix[leftIndex - 1][rightIndex - 1]
+            let substitution = rows.previous[rightIndex - 1]
                 + (left[leftIndex - 1] == right[rightIndex - 1] ? 0 : 1)
             var value = min(
-                matrix[leftIndex - 1][rightIndex] + 1,
-                matrix[leftIndex][rightIndex - 1] + 1,
+                rows.previous[rightIndex] + 1,
+                rows.current[rightIndex - 1] + 1,
                 substitution
             )
             if leftIndex > 1, rightIndex > 1,
                left[leftIndex - 1] == right[rightIndex - 2],
                left[leftIndex - 2] == right[rightIndex - 1] {
-                value = min(value, matrix[leftIndex - 2][rightIndex - 2] + 1)
+                value = min(value, rows.previousPrevious[rightIndex - 2] + 1)
             }
-            matrix[leftIndex][rightIndex] = value
+            rows.current[rightIndex] = value
             rowMinimum = min(rowMinimum, value)
         }
         if rowMinimum > limit { return limit + 1 }
+        swap(&rows.previousPrevious, &rows.previous)
+        swap(&rows.previous, &rows.current)
     }
-    return matrix[left.count][right.count]
+    return rows.previous[right.count]
 }
 
-private func trigramSimilarity(_ lhs: String, _ rhs: String) -> Double {
-    let left = trigrams(lhs)
-    let right = trigrams(rhs)
-    guard !left.isEmpty, !right.isEmpty else { return 0 }
-    return Double(2 * left.intersection(right).count) / Double(left.count + right.count)
+private func characterMask(_ bytes: [UInt8]) -> UInt32 {
+    bytes.reduce(into: UInt32(0)) { mask, byte in
+        mask |= UInt32(1) << UInt32(byte & 31)
+    }
 }
 
-private func trigrams(_ value: String) -> Set<String> {
-    let characters = Array(value)
-    guard characters.count >= 3 else { return [] }
-    return Set((0...(characters.count - 3)).map {
-        String(characters[$0...($0 + 2)])
-    })
+private func trigramHashes(_ bytes: [UInt8]) -> Set<UInt32> {
+    guard bytes.count >= 3 else { return [] }
+    var result: Set<UInt32> = []
+    result.reserveCapacity(bytes.count - 2)
+    for index in 0...(bytes.count - 3) {
+        let first = UInt32(bytes[index]) << 16
+        let second = UInt32(bytes[index + 1]) << 8
+        result.insert(first | second | UInt32(bytes[index + 2]))
+    }
+    return result
+}
+
+private func sharedTrigramCount(_ bytes: [UInt8], _ query: Set<UInt32>) -> Int {
+    guard bytes.count >= 3, !query.isEmpty else { return 0 }
+    var shared = 0
+    for index in 0...(bytes.count - 3) {
+        let first = UInt32(bytes[index]) << 16
+        let second = UInt32(bytes[index + 1]) << 8
+        let hash = first | second | UInt32(bytes[index + 2])
+        if query.contains(hash) { shared += 1 }
+    }
+    return shared
 }
