@@ -1,3 +1,4 @@
+import AeroRouteCore
 import Combine
 import Foundation
 
@@ -52,16 +53,42 @@ protocol AirportSearchProviding: Sendable {
 @MainActor
 final class AirportSearchStore: ObservableObject {
     enum Availability: Equatable {
+        case loading
         case ready
         case unavailable(String)
     }
 
     @Published private(set) var availability: Availability
+    @Published private var catalogAirports: [AirportSearchCandidate] = []
     private let provider: (any AirportSearchProviding)?
 
     init() {
         provider = nil
-        availability = .unavailable("Airport search is not included in this build.")
+        availability = .loading
+        Task { [weak self] in
+            let result = await Task.detached(priority: .userInitiated) {
+                Result { try AirportCatalog.airportsAlphabetically() }
+            }.value
+            guard let self else { return }
+            switch result {
+            case let .success(entries):
+                catalogAirports = entries.map {
+                    AirportSearchCandidate(
+                        id: $0.id,
+                        code: $0.iataCode,
+                        name: $0.name,
+                        municipality: $0.municipality,
+                        countryCode: $0.countryCode,
+                        countryName: $0.countryName,
+                        icaoCode: $0.icaoCode,
+                        isExactCodeMatch: false
+                    )
+                }
+                availability = .ready
+            case let .failure(error):
+                availability = .unavailable(error.localizedDescription)
+            }
+        }
     }
 
     init(provider: any AirportSearchProviding) {
@@ -78,14 +105,19 @@ final class AirportSearchStore: ObservableObject {
     }
 
     func exactCodeMatch(_ code: String) -> AirportSearchCandidate? {
-        let response = lookup(text: code, phase: .submitted, limit: 1)
-        guard let airport = response?.automaticSelection,
-              airport.isExactCodeMatch else { return nil }
-        return airport
+        if let response = lookup(text: code, phase: .submitted, limit: 1),
+           let airport = response.automaticSelection,
+           airport.isExactCodeMatch {
+            return airport
+        }
+        let normalizedCode = code.trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased(with: Locale(identifier: "en_US_POSIX"))
+        guard normalizedCode.count == 3 else { return nil }
+        return catalogAirports.first { $0.code == normalizedCode }
     }
 
     func airportsAlphabetically() -> [AirportSearchCandidate] {
-        (provider?.airportsAlphabetically() ?? []).sorted { lhs, rhs in
+        (provider?.airportsAlphabetically() ?? catalogAirports).sorted { lhs, rhs in
             let order = lhs.name.compare(
                 rhs.name,
                 options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],

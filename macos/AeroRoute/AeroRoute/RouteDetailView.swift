@@ -280,7 +280,6 @@ private struct AirportLabelsEditor: View {
         Button("Search Airports…") {
             searchTarget = endpoint
         }
-        .disabled(workspace.airportSearch.availability != .ready)
     }
 
     private func autocompleteName(for code: String, name: Binding<String>) {
@@ -314,7 +313,6 @@ private struct AirportSearchPicker: View {
 
     @State private var query = ""
     @State private var response: AirportSearchSnapshot?
-    @State private var alphabeticalAirports: [AirportSearchCandidate] = []
     @State private var selectedAirportID: AirportSearchCandidate.ID?
 
     var body: some View {
@@ -330,6 +328,8 @@ private struct AirportSearchPicker: View {
                 Divider()
 
                 switch search.availability {
+                case .loading:
+                    ProgressView("Loading airports…")
                 case let .unavailable(message):
                     ContentUnavailableView(
                         "Airport Search Unavailable",
@@ -348,9 +348,6 @@ private struct AirportSearchPicker: View {
                 } else {
                     lookup(phase: .editing)
                 }
-            }
-            .task {
-                alphabeticalAirports = search.airportsAlphabetically()
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -388,7 +385,7 @@ private struct AirportSearchPicker: View {
 
     private var displayedAirports: [AirportSearchCandidate] {
         query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? alphabeticalAirports
+            ? search.airportsAlphabetically()
             : response?.candidates ?? []
     }
 
