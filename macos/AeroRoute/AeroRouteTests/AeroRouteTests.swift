@@ -171,6 +171,25 @@ final class AeroRouteTests: XCTestCase {
     }
 
     @MainActor
+    func testAirportsCanBeMatchedAutomaticallyFromOneImportedCSVTrack() async throws {
+        let workspace = RouteWorkspace()
+        workspace.importURLs([example("sk2596.csv")])
+        try await waitForIdle(workspace)
+
+        workspace.matchAirportsFromCSV()
+        try await waitForIdle(workspace)
+
+        XCTAssertEqual(workspace.settings.airportCodes, "KEF,CPH")
+        XCTAssertEqual(
+            workspace.settings.airportNames,
+            "Keflavik International Airport,Copenhagen Kastrup Airport"
+        )
+        XCTAssertEqual(workspace.legSummaries.map(\.origin), ["KEF"])
+        XCTAssertEqual(workspace.legSummaries.map(\.destination), ["CPH"])
+        XCTAssertTrue(workspace.previewSVG?.contains("CPH · Copenhagen Kastrup Airport") == true)
+    }
+
+    @MainActor
     func testAirportLabelEditingPreservesEmptyWaypointPositions() async throws {
         let workspace = RouteWorkspace()
         workspace.importURLs([
@@ -435,7 +454,10 @@ final class AeroRouteTests: XCTestCase {
     @MainActor
     private func waitForIdle(_ workspace: RouteWorkspace) async throws {
         for _ in 0..<600 {
-            if !workspace.isImporting && !workspace.isRendering && !workspace.isExporting {
+            if !workspace.isImporting
+                && !workspace.isMatchingAirports
+                && !workspace.isRendering
+                && !workspace.isExporting {
                 return
             }
             try await Task.sleep(nanoseconds: 50_000_000)
