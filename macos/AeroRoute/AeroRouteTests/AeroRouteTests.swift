@@ -255,6 +255,34 @@ final class AeroRouteTests: XCTestCase {
 
 #if os(macOS)
     @MainActor
+    func testAirportSearchFieldIsPresentInItsContentLayout() throws {
+        let hostingView = NSHostingView(
+            rootView: AirportSearchField(text: .constant("")) {}
+                .frame(width: 500)
+                .padding()
+        )
+        hostingView.frame = NSRect(x: 0, y: 0, width: 540, height: 80)
+        let window = NSWindow(
+            contentRect: hostingView.frame,
+            styleMask: [],
+            backing: .buffered,
+            defer: false
+        )
+        window.contentView = hostingView
+        window.layoutIfNeeded()
+        hostingView.layoutSubtreeIfNeeded()
+
+        let searchField = try XCTUnwrap(
+            descendants(of: hostingView).compactMap { $0 as? NSTextField }.first {
+                $0.placeholderString == "Code, airport, city, or country"
+            }
+        )
+        XCTAssertFalse(searchField.isHidden)
+        XCTAssertGreaterThan(searchField.frame.width, 300)
+        XCTAssertGreaterThan(searchField.frame.height, 0)
+    }
+
+    @MainActor
     func testRouteDetailDoesNotClaimAnOversizedFittingWidth() {
         let hostingView = NSHostingView(rootView: RouteDetailView(workspace: RouteWorkspace()))
         let fittingWidth = hostingView.fittingSize.width

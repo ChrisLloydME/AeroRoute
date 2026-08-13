@@ -317,30 +317,32 @@ private struct AirportSearchPicker: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                switch search.availability {
-                case .loading:
-                    ProgressView("Loading airports…")
-                case let .unavailable(message):
-                    ContentUnavailableView(
-                        "Airport Search Unavailable",
-                        systemImage: "exclamationmark.triangle",
-                        description: Text(message)
-                    )
-                case .ready:
-                    results
+            VStack(spacing: 0) {
+                AirportSearchField(text: $query) {
+                    lookup(phase: .submitted)
                 }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+
+                Divider()
+
+                Group {
+                    switch search.availability {
+                    case .loading:
+                        ProgressView("Loading airports…")
+                    case let .unavailable(message):
+                        ContentUnavailableView(
+                            "Airport Search Unavailable",
+                            systemImage: "exclamationmark.triangle",
+                            description: Text(message)
+                        )
+                    case .ready:
+                        results
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .navigationTitle("Search Airports")
-            .searchable(
-                text: $query,
-                placement: .toolbarPrincipal,
-                prompt: "Code, airport, city, or country"
-            )
-            .onSubmit(of: .search) {
-                lookup(phase: .submitted)
-            }
             .onChange(of: query) {
                 if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     response = nil
@@ -450,6 +452,49 @@ private struct AirportSearchResultRow: View {
         return String(String.UnicodeScalarView(
             scalars.compactMap { UnicodeScalar(127_397 + $0.value) }
         ))
+    }
+}
+
+struct AirportSearchField: View {
+    @Binding var text: String
+    let onSubmit: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+
+            TextField("Code, airport, city, or country", text: $text)
+                .textFieldStyle(.plain)
+                .accessibilityIdentifier("airport.searchField")
+                .onSubmit(onSubmit)
+
+            if !text.isEmpty {
+                Button {
+                    text = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear Search")
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .airportSearchFieldBackground()
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func airportSearchFieldBackground() -> some View {
+        if #available(macOS 26.0, iOS 26.0, *) {
+            glassEffect(.regular.interactive(), in: Capsule())
+        } else {
+            background(.regularMaterial, in: Capsule())
+        }
     }
 }
 
