@@ -410,13 +410,13 @@ private struct AirportSearchResultRow: View {
             }
             Spacer()
             Text(airport.code)
-                .font(.body.monospaced().weight(.semibold))
+                .font(.callout.monospaced().weight(.semibold))
                 .foregroundStyle(.black)
-                .padding(.horizontal, 9)
-                .padding(.vertical, 5)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
                 .background(
                     Color.yellow,
-                    in: RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    in: RoundedRectangle(cornerRadius: 5, style: .continuous)
                 )
                 .frame(minWidth: 52, alignment: .trailing)
         }
