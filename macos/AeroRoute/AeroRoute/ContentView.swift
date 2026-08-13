@@ -67,6 +67,16 @@ struct ContentView: View {
         } message: {
             Text(workspace.alertMessage)
         }
+        .sheet(isPresented: Binding(
+            get: { workspace.isPhotoExporting },
+            set: { isPresented in
+                if !isPresented {
+                    workspace.cancelExport()
+                }
+            }
+        )) {
+            ExportProgressPopup(workspace: workspace)
+        }
         .onChange(of: workspace.settings) {
             workspace.scheduleRender()
         }
@@ -101,6 +111,34 @@ struct ContentView: View {
         }
         .navigationSplitViewStyle(.balanced)
 #endif
+    }
+}
+
+private struct ExportProgressPopup: View {
+    @ObservedObject var workspace: RouteWorkspace
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(workspace.statusMessage)
+                .font(.headline)
+                .fixedSize(horizontal: false, vertical: true)
+
+            ProgressView()
+                .progressViewStyle(.linear)
+
+            HStack {
+                Spacer()
+                Button("Cancel", role: .cancel) {
+                    workspace.cancelExport()
+                }
+                .keyboardShortcut(.cancelAction)
+            }
+        }
+        .padding(24)
+        .frame(width: 380)
+        .interactiveDismissDisabled()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("export.progress")
     }
 }
 

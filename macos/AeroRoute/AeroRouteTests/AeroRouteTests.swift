@@ -96,9 +96,16 @@ final class AeroRouteTests: XCTestCase {
         </svg>
         """
 
-        let data = try rasterizedPNGData(from: svg)
+        let fileURL = try rasterizedPNGFile(from: svg, filename: "test-export")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        let data = try Data(contentsOf: fileURL)
 
         XCTAssertEqual(Array(data.prefix(8)), [137, 80, 78, 71, 13, 10, 26, 10])
+#if os(macOS)
+        let representation = try XCTUnwrap(NSBitmapImageRep(data: data))
+        XCTAssertEqual(representation.pixelsWide, 32)
+        XCTAssertEqual(representation.pixelsHigh, 20)
+#endif
     }
 
     @MainActor
@@ -124,6 +131,7 @@ final class AeroRouteTests: XCTestCase {
         XCTAssertTrue(workspace.canExport)
 
         workspace.prepareExport()
+        XCTAssertFalse(workspace.isPhotoExporting)
         try await waitForIdle(workspace)
 
         let exportData = try XCTUnwrap(workspace.exportDocument?.data)
@@ -346,6 +354,20 @@ final class AeroRouteTests: XCTestCase {
         XCTAssertFalse(workspace.isExporting)
         XCTAssertNil(workspace.previewSVG)
         XCTAssertEqual(workspace.statusMessage, "No files imported")
+    }
+
+    @MainActor
+    func testCancelExportDismissesProgressPopupState() {
+        let workspace = RouteWorkspace()
+        workspace.isExporting = true
+        workspace.isPhotoExporting = true
+        workspace.statusMessage = "Rendering PNG…"
+
+        workspace.cancelExport()
+
+        XCTAssertFalse(workspace.isExporting)
+        XCTAssertFalse(workspace.isPhotoExporting)
+        XCTAssertEqual(workspace.statusMessage, "Export cancelled")
     }
 
 #if os(macOS)

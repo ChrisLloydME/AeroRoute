@@ -99,6 +99,7 @@ final class RouteWorkspace: ObservableObject {
     @Published var isExporterPresented = false
     @Published var exportDocument: SVGFileDocument?
     @Published var isExporting = false
+    @Published var isPhotoExporting = false
     @Published var isImporting = false
 
     @Published var isAlertPresented = false
@@ -473,25 +474,36 @@ final class RouteWorkspace: ObservableObject {
         let worker = renderWorker
         exportDocument = nil
         isExporting = true
-        statusMessage = "Preparing PNG…"
+        isPhotoExporting = true
+        let pixelWidth = Int((Double(settings.designWidth) * settings.outputScale).rounded())
+        let pixelHeight = Int((Double(settings.designHeight) * settings.outputScale).rounded())
+        statusMessage = "Rendering PNG (\(pixelWidth.formatted()) × \(pixelHeight.formatted()))…"
 
         exportTask = Task { [weak self] in
             let outcome = await worker.renderPNG(
                 tracks: tracks,
                 sourceName: sourceName,
                 options: options,
-                style: style
+                style: style,
+                filename: filename
             )
             guard !Task.isCancelled,
                   let self,
                   generation == self.exportGeneration,
-                  revision == self.workspaceRevision else { return }
+                  revision == self.workspaceRevision else {
+                if case let .success(fileURL, _) = outcome {
+                    try? FileManager.default.removeItem(at: fileURL)
+                }
+                return
+            }
 
             switch outcome {
-            case let .success(data, stats):
+            case let .success(fileURL, stats):
+                defer { try? FileManager.default.removeItem(at: fileURL) }
                 do {
+                    self.statusMessage = "Saving PNG to Photos…"
                     try await PhotoLibraryExporter.save(
-                        pngData: data,
+                        pngAt: fileURL,
                         filename: filename
                     )
                     guard !Task.isCancelled,
@@ -499,6 +511,7 @@ final class RouteWorkspace: ObservableObject {
                           revision == self.workspaceRevision else { return }
                     self.exportTask = nil
                     self.isExporting = false
+                    self.isPhotoExporting = false
                     self.statusMessage = "Saved \(filename).png to Photos"
                     self.previewStats = stats
                 } catch {
@@ -506,6 +519,7 @@ final class RouteWorkspace: ObservableObject {
                           generation == self.exportGeneration else { return }
                     self.exportTask = nil
                     self.isExporting = false
+                    self.isPhotoExporting = false
                     self.presentAlert(
                         title: "Cannot save to Photos",
                         message: Self.message(for: error)
@@ -515,13 +529,21 @@ final class RouteWorkspace: ObservableObject {
             case let .failure(message):
                 self.exportTask = nil
                 self.isExporting = false
+                self.isPhotoExporting = false
                 self.presentAlert(title: "Cannot export", message: message)
                 self.statusMessage = message
             case .cancelled:
                 self.exportTask = nil
                 self.isExporting = false
+                self.isPhotoExporting = false
             }
         }
+    }
+
+    func cancelExport() {
+        guard isExporting else { return }
+        invalidateExport()
+        statusMessage = previewStats.map(readyStatus(stats:)) ?? "Export cancelled"
     }
 
     func handleExport(_ result: Result<URL, Error>) {
@@ -648,6 +670,7 @@ final class RouteWorkspace: ObservableObject {
         exportTask = nil
         exportGeneration += 1
         isExporting = false
+        isPhotoExporting = false
         isExporterPresented = false
         exportDocument = nil
     }
@@ -722,7 +745,7 @@ private enum RenderOutcome: Sendable {
 }
 
 private enum PNGRenderOutcome: Sendable {
-    case success(Data, RenderStats)
+    case success(URL, RenderStats)
     case failure(String)
     case cancelled
 }
@@ -748,7 +771,8 @@ private actor RenderWorker {
         tracks: [Track],
         sourceName: String,
         options: RenderOptions,
-        style: MapStyle
+        style: MapStyle,
+        filename: String
     ) -> PNGRenderOutcome {
         guard !Task.isCancelled else { return .cancelled }
         switch RouteWorkspace.render(
@@ -759,8 +783,14 @@ private actor RenderWorker {
         ) {
         case let .success(svg, stats):
             do {
-                let data = try rasterizedPNGData(from: svg)
-                return Task.isCancelled ? .cancelled : .success(data, stats)
+                let fileURL = try rasterizedPNGFile(from: svg, filename: filename)
+                guard !Task.isCancelled else {
+                    try? FileManager.default.removeItem(at: fileURL)
+                    return .cancelled
+                }
+                return .success(fileURL, stats)
+            } catch is CancellationError {
+                return .cancelled
             } catch {
                 return .failure(RouteWorkspace.message(for: error))
             }
