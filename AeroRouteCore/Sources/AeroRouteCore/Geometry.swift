@@ -146,6 +146,23 @@ public enum AeroRouteGeometry {
         )
     }
 
+    /// Keeps the full legacy world extent while rotating its longitude seam
+    /// so the route's unwrapped east-west bounds are centered on the canvas.
+    public static func routeCenteredWorldProjection(
+        coordinates: [(longitude: Double, latitude: Double)]
+    ) -> MapProjection {
+        precondition(!coordinates.isEmpty)
+
+        let longitudes = unwrapLongitudes(coordinates).map(\.longitude)
+        let center = (longitudes.min()! + longitudes.max()!) / 2
+        return MapProjection(
+            minimumLongitude: center - 180,
+            maximumLongitude: center + 180,
+            minimumLatitude: -60,
+            maximumLatitude: 85
+        )
+    }
+
     /// Returns the equivalent longitude nearest the projection center.
     public static func longitudeNearestProjectionCenter(
         _ longitude: Double,
@@ -311,7 +328,8 @@ public enum AeroRouteGeometry {
         width: Double,
         height: Double,
         projection: MapProjection,
-        viewport: MapViewport? = nil
+        viewport: MapViewport? = nil,
+        includeAdjacentWorldCopies: Bool = false
     ) -> String {
         let polygons: [GeoJSONPolygonCoordinates]
         switch geometry {
@@ -335,24 +353,29 @@ public enum AeroRouteGeometry {
                     ringCenter,
                     projection: projection
                 ) - ringCenter
-                let projected = coordinates.map {
-                    project(
-                        longitude: $0.longitude + shift,
-                        latitude: $0.latitude,
-                        width: width,
-                        height: height,
-                        projection: projection,
-                        viewport: viewport
+                let shifts = includeAdjacentWorldCopies
+                    ? [shift - 360, shift, shift + 360]
+                    : [shift]
+                for worldShift in shifts {
+                    let projected = coordinates.map {
+                        project(
+                            longitude: $0.longitude + worldShift,
+                            latitude: $0.latitude,
+                            width: width,
+                            height: height,
+                            projection: projection,
+                            viewport: viewport
+                        )
+                    }
+                    guard let first = projected.first else { continue }
+                    commands.append(
+                        "M \(formatCoordinate(first.x)) \(formatCoordinate(first.y))"
                     )
+                    commands.append(contentsOf: projected.dropFirst().map {
+                        "L \(formatCoordinate($0.x)) \(formatCoordinate($0.y))"
+                    })
+                    commands.append("Z")
                 }
-                guard let first = projected.first else { continue }
-                commands.append(
-                    "M \(formatCoordinate(first.x)) \(formatCoordinate(first.y))"
-                )
-                commands.append(contentsOf: projected.dropFirst().map {
-                    "L \(formatCoordinate($0.x)) \(formatCoordinate($0.y))"
-                })
-                commands.append("Z")
             }
         }
         return commands.joined(separator: " ")

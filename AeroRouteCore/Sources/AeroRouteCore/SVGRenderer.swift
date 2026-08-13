@@ -49,6 +49,7 @@ public struct RenderOptions: Equatable, Sendable {
     public var showAirports: Bool
     public var showFlightNumber: Bool
     public var fitMapToRoute: Bool
+    public var centerRouteOnWorldMap: Bool
     public var flightNumber: String?
     public var originCode: String?
     public var destinationCode: String?
@@ -68,6 +69,7 @@ public struct RenderOptions: Equatable, Sendable {
         showAirports: Bool = false,
         showFlightNumber: Bool = false,
         fitMapToRoute: Bool = false,
+        centerRouteOnWorldMap: Bool = false,
         flightNumber: String? = nil,
         originCode: String? = nil,
         destinationCode: String? = nil,
@@ -86,6 +88,7 @@ public struct RenderOptions: Equatable, Sendable {
         self.showAirports = showAirports
         self.showFlightNumber = showFlightNumber
         self.fitMapToRoute = fitMapToRoute
+        self.centerRouteOnWorldMap = centerRouteOnWorldMap
         self.flightNumber = flightNumber
         self.originCode = originCode
         self.destinationCode = destinationCode
@@ -205,22 +208,36 @@ public enum SVGRenderer {
         )
 
         let definitions = root.add("defs")
-        let viewport = options.fitMapToRoute
+        let usesFullCanvas = options.fitMapToRoute || options.centerRouteOnWorldMap
+        let viewport = usesFullCanvas
             ? MapViewport(left: 0, top: 0, right: widthDouble, bottom: heightDouble)
             : AeroRouteGeometry.mapViewport(width: widthDouble, height: heightDouble)
         let unwrapped = AeroRouteGeometry.unwrapLongitudes(
             track.points.map { ($0.longitude, $0.latitude) }
         )
-        let projection = options.fitMapToRoute
-            ? AeroRouteGeometry.routeFittingProjection(
+        let projection: MapProjection?
+        if options.fitMapToRoute {
+            projection = AeroRouteGeometry.routeFittingProjection(
                 coordinates: unwrapped,
                 width: widthDouble,
                 height: heightDouble,
                 viewport: viewport
             )
-            : nil
+        } else if options.centerRouteOnWorldMap {
+            projection = AeroRouteGeometry.routeCenteredWorldProjection(
+                coordinates: unwrapped
+            )
+        } else {
+            projection = nil
+        }
         if options.fitMapToRoute {
             root.setAttribute("data-map-scope", "route")
+        } else if let projection {
+            root.setAttribute("data-map-scope", "world-route-centered")
+            root.setAttribute(
+                "data-map-center-longitude",
+                fixed(projection.centerLongitude, digits: 6)
+            )
         }
         let clipPath = definitions.add(
             "clipPath",
@@ -254,14 +271,16 @@ public enum SVGRenderer {
             width: widthDouble,
             height: heightDouble,
             projection: projection,
-            viewport: viewport
+            viewport: viewport,
+            includeAdjacentWorldCopies: options.centerRouteOnWorldMap
         )
         let countryPath = combinedMapPath(
             features: countries.features,
             width: widthDouble,
             height: heightDouble,
             projection: projection,
-            viewport: viewport
+            viewport: viewport,
+            includeAdjacentWorldCopies: options.centerRouteOnWorldMap
         )
 
         mapLayers.add(
@@ -501,7 +520,8 @@ public enum SVGRenderer {
         width: Double,
         height: Double,
         projection: MapProjection?,
-        viewport: MapViewport
+        viewport: MapViewport,
+        includeAdjacentWorldCopies: Bool
     ) -> String {
         features.compactMap { feature in
             guard let geometry = feature.geometry else { return nil }
@@ -512,7 +532,8 @@ public enum SVGRenderer {
                     width: width,
                     height: height,
                     projection: projection,
-                    viewport: viewport
+                    viewport: viewport,
+                    includeAdjacentWorldCopies: includeAdjacentWorldCopies
                 )
             } else {
                 path = AeroRouteGeometry.geoJSONPath(

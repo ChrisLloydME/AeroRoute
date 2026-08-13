@@ -229,7 +229,7 @@ final class GoldenCompatibilityTests: XCTestCase {
         XCTAssertTrue(rendered.svg.contains("data-map-scope=\"route\""))
         XCTAssertTrue(
             rendered.svg.contains(
-                "<rect x=\"0\" y=\"0\" width=\"1600\" height=\"1000\" />"
+                "<rect x=\"0.000\" y=\"0.000\" width=\"1600.000\" height=\"1000.000\" />"
             )
         )
         XCTAssertGreaterThan(abs(rendered.stats.endXY.x - rendered.stats.startXY.x), 500)
@@ -237,6 +237,36 @@ final class GoldenCompatibilityTests: XCTestCase {
         XCTAssertLessThanOrEqual(rendered.stats.startXY.x, viewport.right)
         XCTAssertGreaterThanOrEqual(rendered.stats.endXY.y, viewport.top)
         XCTAssertLessThanOrEqual(rendered.stats.endXY.y, viewport.bottom)
+    }
+
+    func testRouteCenteredWorldRenderKeepsFullWorldAndFillsCanvas() throws {
+        let track = try Self.loadFixtureTrack(Self.fixtures[6])
+        let rendered = try SVGRenderer.buildSVG(
+            track: track,
+            options: RenderOptions(centerRouteOnWorldMap: true)
+        )
+
+        XCTAssertTrue(rendered.svg.contains("data-map-scope=\"world-route-centered\""))
+        XCTAssertTrue(rendered.svg.contains("data-map-center-longitude=\""))
+        XCTAssertTrue(
+            rendered.svg.contains(
+                "<rect x=\"0.000\" y=\"0.000\" width=\"1600.000\" height=\"1000.000\" />"
+            )
+        )
+    }
+
+    func testRouteFittingTakesPrecedenceOverCenteredWorld() throws {
+        let track = try Self.loadFixtureTrack(Self.fixtures[0])
+        let rendered = try SVGRenderer.buildSVG(
+            track: track,
+            options: RenderOptions(
+                fitMapToRoute: true,
+                centerRouteOnWorldMap: true
+            )
+        )
+
+        XCTAssertTrue(rendered.svg.contains("data-map-scope=\"route\""))
+        XCTAssertFalse(rendered.svg.contains("world-route-centered"))
     }
 
     func testOrderedXMLSerializationMatchesElementTreeConventions() {

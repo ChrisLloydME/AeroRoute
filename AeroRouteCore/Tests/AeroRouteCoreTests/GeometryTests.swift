@@ -100,6 +100,21 @@ struct GeometryTests {
         )
     }
 
+    @Test func routeCenteredWorldProjectionPreservesWorldSpanAcrossAntimeridian() {
+        let projection = AeroRouteGeometry.routeCenteredWorldProjection(
+            coordinates: [
+                (longitude: 175, latitude: 10),
+                (longitude: -175, latitude: 12),
+            ]
+        )
+
+        #expect(projection.centerLongitude == 180)
+        #expect(projection.minimumLongitude == 0)
+        #expect(projection.maximumLongitude == 360)
+        #expect(projection.minimumLatitude == -60)
+        #expect(projection.maximumLatitude == 85)
+    }
+
     @Test func coordinateFormattingMatchesPython() {
         #expect(AeroRouteGeometry.formatCoordinate(12.340000) == "12.34")
         #expect(AeroRouteGeometry.formatCoordinate(-0.0000001) == "0")
