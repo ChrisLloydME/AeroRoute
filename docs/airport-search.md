@@ -15,10 +15,12 @@ The engine processes input in this order:
    POSIX locale.
 2. Discard non-ASCII scripts and replace punctuation, symbols, and emoji with
    token boundaries.
-3. Expand selected English abbreviations such as `intl` and `apt`.
-4. Remove query noise such as `please`, `find`, `airport`, and `near`.
-5. Extract every plausible three- or four-letter code, including codes embedded
-   in a longer query.
+3. Expand selected airport abbreviations such as `intl` and `apt`.
+4. Treat a single three- or four-letter term as a possible airport code.
+
+The parser expects search terms, not conversational sentences. It does not try
+to understand requests such as “please find the airport near London”. Generic
+terms such as `airport` by themselves return no result.
 
 For example, `✈️ＰＶＧ🛬` becomes the code `PVG`, and `São—Paulo` becomes the
 terms `sao paulo`. Chinese `上海` has no English search terms and returns no

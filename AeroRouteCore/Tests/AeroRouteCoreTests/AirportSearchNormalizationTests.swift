@@ -19,19 +19,19 @@ import Testing
         #expect(NormalizedAirportQuery("ZSPD").possibleCode == "ZSPD")
         #expect(NormalizedAirportQuery("✈️ＰＶＧ🛬").possibleCode == "PVG")
         #expect(NormalizedAirportQuery("PVG airport").possibleCode == nil)
-        #expect(NormalizedAirportQuery("PVG airport").codeCandidates == ["PVG"])
+        #expect(NormalizedAirportQuery("PVG airport").codeCandidates.isEmpty)
         #expect(NormalizedAirportQuery("New York John Kennedy").codeCandidates.isEmpty)
-        #expect(NormalizedAirportQuery("new york PVG").codeCandidates == ["PVG"])
+        #expect(NormalizedAirportQuery("new york PVG").codeCandidates.isEmpty)
         #expect(NormalizedAirportQuery("✈️").isEmpty)
         #expect(NormalizedAirportQuery("🇨🇳").isEmpty)
     }
 
-    @Test func expandsEnglishAbbreviationsAndDropsQueryNoise() {
-        let query = NormalizedAirportQuery("Please find Heathrow Intl Airport")
+    @Test func expandsCommonAirportAbbreviationsWithoutParsingSentences() {
+        let query = NormalizedAirportQuery("Heathrow Intl")
 
-        #expect(query.tokens == ["please", "find", "heathrow", "international", "airport"])
+        #expect(query.tokens == ["heathrow", "international"])
         #expect(query.significantTokens == ["heathrow"])
         #expect(query.compact == "heathrow")
-        #expect(NormalizedAirportQuery("airport please").isEmpty)
+        #expect(NormalizedAirportQuery("airport").isEmpty)
     }
 }
