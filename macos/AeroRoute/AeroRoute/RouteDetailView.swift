@@ -331,17 +331,6 @@ private struct AirportSearchPicker: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .airportSearchBar(text: $query) {
-            lookup(phase: .submitted)
-        }
-        .airportPickerActions(
-            canApply: selectedAirport != nil,
-            onCancel: { dismiss() },
-            onApply: {
-                guard let selectedAirport else { return }
-                onSelect(selectedAirport)
-            }
-        )
         .onChange(of: query) {
             if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 response = nil
@@ -359,6 +348,13 @@ private struct AirportSearchPicker: View {
                 AirportSearchResultRow(airport: airport)
                     .tag(airport.id)
             }
+            .airportPickerChrome(
+                text: $query,
+                canApply: selectedAirport != nil,
+                onSearch: { lookup(phase: .submitted) },
+                onCancel: { dismiss() },
+                onApply: applySelection
+            )
         } else if !trimmedQuery.isEmpty {
             ContentUnavailableView(
                 "No Results",
@@ -366,6 +362,13 @@ private struct AirportSearchPicker: View {
                 description: Text("No airports match “\(trimmedQuery)”.")
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .airportPickerChrome(
+                text: $query,
+                canApply: false,
+                onSearch: { lookup(phase: .submitted) },
+                onCancel: { dismiss() },
+                onApply: applySelection
+            )
         } else {
             ContentUnavailableView(
                 "No Airports Available",
@@ -373,6 +376,13 @@ private struct AirportSearchPicker: View {
                 description: Text("Airport data will appear here when it is available.")
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .airportPickerChrome(
+                text: $query,
+                canApply: false,
+                onSearch: { lookup(phase: .submitted) },
+                onCancel: { dismiss() },
+                onApply: applySelection
+            )
         }
     }
 
@@ -393,6 +403,11 @@ private struct AirportSearchPicker: View {
 
     private func lookup(phase: AirportSearchQueryPhase) {
         response = search.lookup(text: query, phase: phase)
+    }
+
+    private func applySelection() {
+        guard let selectedAirport else { return }
+        onSelect(selectedAirport)
     }
 }
 
@@ -483,43 +498,36 @@ private extension View {
     }
 
     @ViewBuilder
-    func airportSearchBar(
+    func airportPickerChrome(
         text: Binding<String>,
-        onSubmit: @escaping () -> Void
-    ) -> some View {
-        if #available(macOS 26.0, iOS 26.0, *) {
-            safeAreaBar(edge: .top, spacing: 0) {
-                AirportSearchField(text: text, onSubmit: onSubmit)
-                    .padding(.horizontal, 16)
-            }
-            .scrollEdgeEffectStyle(.soft, for: .top)
-        } else {
-            safeAreaInset(edge: .top, spacing: 0) {
-                AirportSearchField(text: text, onSubmit: onSubmit)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(.bar)
-            }
-        }
-    }
-
-    @ViewBuilder
-    func airportPickerActions(
         canApply: Bool,
+        onSearch: @escaping () -> Void,
         onCancel: @escaping () -> Void,
         onApply: @escaping () -> Void
     ) -> some View {
         if #available(macOS 26.0, iOS 26.0, *) {
-            safeAreaBar(edge: .bottom, spacing: 0) {
+            safeAreaBar(edge: .top, spacing: 0) {
+                AirportSearchField(text: text, onSubmit: onSearch)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+            }
+            .safeAreaBar(edge: .bottom, spacing: 0) {
                 AirportPickerActionBar(
                     canApply: canApply,
                     onCancel: onCancel,
                     onApply: onApply
                 )
+                .padding(.vertical, 8)
             }
-            .scrollEdgeEffectStyle(.soft, for: .bottom)
+            .scrollEdgeEffectStyle(.soft, for: [.top, .bottom])
         } else {
-            safeAreaInset(edge: .bottom, spacing: 0) {
+            safeAreaInset(edge: .top, spacing: 0) {
+                AirportSearchField(text: text, onSubmit: onSearch)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(.bar)
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
                 AirportPickerActionBar(
                     canApply: canApply,
                     onCancel: onCancel,
