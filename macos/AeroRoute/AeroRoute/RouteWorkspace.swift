@@ -101,6 +101,7 @@ final class RouteWorkspace: ObservableObject {
     @Published var isExporting = false
     @Published var isPhotoExporting = false
     @Published var isImporting = false
+    @Published var isMatchingAirports = false
 
     @Published var isAlertPresented = false
     @Published var alertTitle = "AeroRoute"
@@ -110,11 +111,14 @@ final class RouteWorkspace: ObservableObject {
     private var renderTask: Task<Void, Never>?
     private var exportTask: Task<Void, Never>?
     private var importTask: Task<Void, Never>?
+    private var airportMatchTask: Task<Void, Never>?
     private let renderWorker = RenderWorker()
     private let importWorker = ImportWorker()
+    private let airportMatchWorker = AirportMatchWorker()
     private var renderGeneration = 0
     private var exportGeneration = 0
     private var importGeneration = 0
+    private var airportMatchGeneration = 0
     private var workspaceRevision = 0
     private var loadedCommandLineArguments = false
 
@@ -126,6 +130,7 @@ final class RouteWorkspace: ObservableObject {
         renderTask?.cancel()
         exportTask?.cancel()
         importTask?.cancel()
+        airportMatchTask?.cancel()
     }
 
     var documentTitle: String {
@@ -147,6 +152,7 @@ final class RouteWorkspace: ObservableObject {
             && renderError == nil
             && previewSVG != nil
             && !isImporting
+            && !isMatchingAirports
             && !isRendering
             && !isExporting
     }
@@ -211,6 +217,57 @@ final class RouteWorkspace: ObservableObject {
         settings.airportCodes = serializedWaypointValues(codes)
         settings.airportNames = serializedWaypointValues(names)
         scheduleRender()
+    }
+
+    func matchAirportsFromCSV() {
+        guard !legs.isEmpty, !isImporting, !isMatchingAirports else { return }
+
+        airportMatchTask?.cancel()
+        airportMatchGeneration += 1
+        let generation = airportMatchGeneration
+        let legIDs = legs.map(\.id)
+        let importedLegs = legs.map(\.imported)
+        let worker = airportMatchWorker
+        isMatchingAirports = true
+        statusMessage = importedLegs.count == 1
+            ? "Matching airports…"
+            : "Matching airports for \(importedLegs.count) CSV files…"
+
+        airportMatchTask = Task { [weak self] in
+            let outcome = await worker.match(importedLegs)
+            guard !Task.isCancelled,
+                  let self,
+                  generation == self.airportMatchGeneration else { return }
+
+            self.airportMatchTask = nil
+            self.isMatchingAirports = false
+            guard self.legs.map(\.id) == legIDs else { return }
+            switch outcome {
+            case let .success(matches):
+                let airports = matches.map { $0.match.automaticOrigin?.airport }
+                    + [matches.last?.match.automaticDestination?.airport]
+                self.settings.airportCodes = self.serializedWaypointValues(
+                    airports.map { $0?.iataCode ?? "" }
+                )
+                self.settings.airportNames = self.serializedWaypointValues(
+                    airports.map { $0?.name ?? "" }
+                )
+
+                let unresolvedCount = airports.filter { $0 == nil }.count
+                if unresolvedCount > 0 {
+                    self.presentAlert(
+                        title: "Some airports need review",
+                        message: "Could not confidently match \(unresolvedCount) route endpoint\(unresolvedCount == 1 ? "" : "s")."
+                    )
+                }
+                self.scheduleRender()
+            case let .failure(message):
+                self.presentAlert(title: "Airport matching failed", message: message)
+                self.statusMessage = message
+            case .cancelled:
+                break
+            }
+        }
     }
 
     func importURLs(_ urls: [URL]) {
@@ -315,6 +372,11 @@ final class RouteWorkspace: ObservableObject {
     }
 
     func clear() {
+        airportMatchTask?.cancel()
+        airportMatchTask = nil
+        airportMatchGeneration += 1
+        isMatchingAirports = false
+
         importTask?.cancel()
         importTask = nil
         importGeneration += 1
@@ -750,6 +812,12 @@ private enum PNGRenderOutcome: Sendable {
     case cancelled
 }
 
+private enum AirportMatchOutcome: Sendable {
+    case success([AirportFileMatchResponse])
+    case failure(String)
+    case cancelled
+}
+
 private actor RenderWorker {
     func render(
         tracks: [Track],
@@ -814,6 +882,18 @@ private actor ImportWorker {
         guard !knownIdentities.contains(identity) else { return .duplicate }
         let outcome = RouteWorkspace.loadImport(source, identity: identity)
         return Task.isCancelled ? .cancelled : outcome
+    }
+}
+
+private actor AirportMatchWorker {
+    func match(_ legs: [ImportedLeg]) -> AirportMatchOutcome {
+        guard !Task.isCancelled else { return .cancelled }
+        do {
+            let matches = try AirportSearchEngine().matchAirportFiles(legs)
+            return Task.isCancelled ? .cancelled : .success(matches)
+        } catch {
+            return .failure(RouteWorkspace.message(for: error))
+        }
     }
 }
 
