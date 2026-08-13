@@ -18,6 +18,8 @@ public final class AirportSearchEngine: @unchecked Sendable {
         let aliasCompacts: [String]
         let compactFields: Set<String>
         let acronyms: Set<String>
+        let latitudeRadians: Double
+        let longitudeRadians: Double
     }
 
     private struct RankedAirport {
@@ -102,6 +104,14 @@ public final class AirportSearchEngine: @unchecked Sendable {
 
     /// Unified UI-facing entry point for both incremental and submitted lookup.
     public func lookup(_ request: AirportSearchRequest) -> AirportSearchResponse {
+        guard request.text.utf8.count <= NormalizedAirportQuery.maximumInputBytes else {
+            return AirportSearchResponse(
+                request: request,
+                normalizedText: "",
+                resolution: .noMatches,
+                results: []
+            )
+        }
         let query = NormalizedAirportQuery(request.text)
         let defaultLimit = request.phase == .editing ? 8 : 20
         let limit = max(0, request.limit ?? defaultLimit)
@@ -161,15 +171,11 @@ public final class AirportSearchEngine: @unchecked Sendable {
         for track: Track,
         options: AirportTrackMatchOptions = .init()
     ) -> AirportTrackMatchResponse {
+        guard options.isValid else {
+            return invalidTrackResponse(track: track, options: options, .invalidRequest)
+        }
         guard let firstPoint = track.points.first, let lastPoint = track.points.last else {
-            let invalidRequest = AirportProximityRequest(
-                coordinate: AirportCoordinate(latitude: .nan, longitude: .nan),
-                limit: options.limit,
-                maximumDistanceKM: options.maximumDistanceKM,
-                prefersScheduledService: options.prefersScheduledService
-            )
-            let invalid = airports(near: invalidRequest)
-            return AirportTrackMatchResponse(origin: invalid, destination: invalid)
+            return invalidTrackResponse(track: track, options: options, .invalidCoordinate)
         }
         let originCoordinate = AirportCoordinate(
             latitude: firstPoint.latitude,
@@ -214,6 +220,7 @@ public final class AirportSearchEngine: @unchecked Sendable {
         legs.enumerated().map { inputIndex, leg in
             AirportFileMatchResponse(
                 inputIndex: inputIndex,
+                source: leg.track.source,
                 metadata: leg.metadata,
                 match: matchAirports(for: leg.track, options: options)
             )
@@ -232,31 +239,38 @@ public final class AirportSearchEngine: @unchecked Sendable {
                 candidates: []
             )
         }
-        guard request.limit > 0,
-              request.maximumDistanceKM.isFinite,
-              request.maximumDistanceKM > 0 else {
+        guard request.hasValidParameters else {
             return AirportProximityResponse(
                 request: request,
-                resolution: .noMatches,
+                resolution: .invalidRequest,
                 candidates: []
             )
         }
 
         let validEvidence = evidence.filter(\.isValid)
+        let evidenceRadians = validEvidence.map(RadianCoordinate.init)
+        let requestRadians = RadianCoordinate(request.coordinate)
+        let evaluationDistanceKM = max(request.maximumDistanceKM, 25)
+        let maximumLatitudeDelta = min(
+            .pi,
+            evaluationDistanceKM / earthMeanRadiusKM
+        )
         var ranked: [RankedLocation] = []
         ranked.reserveCapacity(32)
         for record in airports {
-            let airportCoordinate = AirportCoordinate(
-                latitude: record.airport.latitude,
-                longitude: record.airport.longitude
+            guard abs(record.latitudeRadians - requestRadians.latitude) <= maximumLatitudeDelta
+            else { continue }
+            let airportRadians = RadianCoordinate(
+                latitude: record.latitudeRadians,
+                longitude: record.longitudeRadians
             )
-            let distance = geographicDistanceKM(request.coordinate, airportCoordinate)
-            guard distance <= request.maximumDistanceKM else { continue }
+            let distance = geographicDistanceKM(requestRadians, airportRadians)
+            guard distance <= evaluationDistanceKM else { continue }
 
             var closest = distance
             var supportingPoints = 0
-            for observation in validEvidence {
-                let observedDistance = geographicDistanceKM(observation, airportCoordinate)
+            for observation in evidenceRadians {
+                let observedDistance = geographicDistanceKM(observation, airportRadians)
                 closest = min(closest, observedDistance)
                 if observedDistance <= supportingRadiusKM { supportingPoints += 1 }
             }
@@ -295,7 +309,9 @@ public final class AirportSearchEngine: @unchecked Sendable {
             }
             return $0.candidate.airport.id < $1.candidate.airport.id
         }
-        let selectedRanks = Array(ranked.prefix(request.limit))
+        let selectedRanks = Array(ranked.lazy
+            .filter { $0.candidate.distanceKM <= request.maximumDistanceKM }
+            .prefix(request.limit))
         let candidates = selectedRanks.map(\.candidate)
         guard let first = candidates.first else {
             return AirportProximityResponse(
@@ -305,16 +321,20 @@ public final class AirportSearchEngine: @unchecked Sendable {
             )
         }
 
-        let hasSupport = validEvidence.count <= 1 || first.supportingPointCount >= 2
+        let requiredSupport = min(2, validEvidence.count)
+        let hasSupport = requiredSupport > 0
+            && first.supportingPointCount >= requiredSupport
         let isDecisive: Bool
-        if selectedRanks.count < 2 {
+        if ranked.first?.candidate.id != first.id {
+            isDecisive = false
+        } else if ranked.count < 2 {
             isDecisive = true
         } else {
             // The same bounded operational priors used for ordering may resolve a
             // close commercial-airport/air-base pair, but can never outweigh a
             // two-kilometre ambiguity on their own.
-            let margin = selectedRanks[1].adjustedDistanceKM
-                - selectedRanks[0].adjustedDistanceKM
+            let margin = ranked[1].adjustedDistanceKM
+                - ranked[0].adjustedDistanceKM
             isDecisive = margin >= max(2, first.distanceKM * 0.75)
         }
         let resolution: AirportLocationResolution = first.confidence == .high
@@ -334,15 +354,20 @@ public final class AirportSearchEngine: @unchecked Sendable {
         options: AirportTrackMatchOptions
     ) -> [AirportCoordinate] {
         let anchorTime = origin ? track.start.timestamp : track.end.timestamp
-        let window = max(0, options.evidenceWindowSeconds)
-        let matching = track.points.filter { point in
-            origin
-                ? point.timestamp - anchorTime <= window
-                : anchorTime - point.timestamp <= window
+        let window = options.evidenceWindowSeconds
+        let ordered: [TrackPoint]
+        if origin {
+            ordered = Array(track.points.prefix { point in
+                let delta = point.timestamp - anchorTime
+                return delta >= 0 && delta <= window
+            })
+        } else {
+            ordered = Array(track.points.reversed().prefix { point in
+                let delta = anchorTime - point.timestamp
+                return delta >= 0 && delta <= window
+            })
         }
-        let ordered = origin ? matching : Array(matching.reversed())
-        let maximum = max(1, options.maximumEvidencePoints)
-        let points = evenlySample(Array(ordered), limit: maximum)
+        let points = evenlySample(ordered, limit: options.maximumEvidencePoints)
         return points.map {
             AirportCoordinate(latitude: $0.latitude, longitude: $0.longitude)
         }
@@ -363,6 +388,33 @@ public final class AirportSearchEngine: @unchecked Sendable {
         return .low
     }
 
+    private func invalidTrackResponse(
+        track: Track,
+        options: AirportTrackMatchOptions,
+        _ resolution: AirportLocationResolution
+    ) -> AirportTrackMatchResponse {
+        func response(_ point: TrackPoint?) -> AirportProximityResponse {
+            let request = AirportProximityRequest(
+                coordinate: AirportCoordinate(
+                    latitude: point?.latitude ?? .nan,
+                    longitude: point?.longitude ?? .nan
+                ),
+                limit: options.limit,
+                maximumDistanceKM: options.maximumDistanceKM,
+                prefersScheduledService: options.prefersScheduledService
+            )
+            return AirportProximityResponse(
+                request: request,
+                resolution: resolution,
+                candidates: []
+            )
+        }
+        return AirportTrackMatchResponse(
+            origin: response(track.points.first),
+            destination: response(track.points.last)
+        )
+    }
+
     private func rankedResults(
         _ input: String,
         limit: Int,
@@ -377,7 +429,7 @@ public final class AirportSearchEngine: @unchecked Sendable {
         policy: SearchPolicy
     ) -> [AirportSearchResult] {
         guard limit > 0 else { return [] }
-        guard !query.isEmpty else { return [] }
+        guard !query.isEmpty, query.isWithinSearchLimits else { return [] }
 
         let permitFuzzyCode = query.fuzzyCodeCandidate.map {
             policy.allowsFuzzyCode && !indexes.knownCodes.contains($0)
@@ -1061,7 +1113,9 @@ public final class AirportSearchEngine: @unchecked Sendable {
             countryCompact: countryCompact,
             aliasCompacts: aliasCompacts,
             compactFields: compactFields,
-            acronyms: acronyms
+            acronyms: acronyms,
+            latitudeRadians: airport.latitude * .pi / 180,
+            longitudeRadians: airport.longitude * .pi / 180
         )
     }
 
@@ -1272,17 +1326,30 @@ private func sharedTrigramCount(_ bytes: [UInt8], _ query: Set<UInt32>) -> Int {
     return shared
 }
 
+private let earthMeanRadiusKM = 6_371.0088
+
+private struct RadianCoordinate {
+    let latitude: Double
+    let longitude: Double
+
+    init(_ coordinate: AirportCoordinate) {
+        latitude = coordinate.latitude * .pi / 180
+        longitude = coordinate.longitude * .pi / 180
+    }
+
+    init(latitude: Double, longitude: Double) {
+        self.latitude = latitude
+        self.longitude = longitude
+    }
+}
+
 private func geographicDistanceKM(
-    _ first: AirportCoordinate,
-    _ second: AirportCoordinate
+    _ first: RadianCoordinate,
+    _ second: RadianCoordinate
 ) -> Double {
-    let latitude1 = first.latitude * .pi / 180
-    let longitude1 = first.longitude * .pi / 180
-    let latitude2 = second.latitude * .pi / 180
-    let longitude2 = second.longitude * .pi / 180
-    let latitudeDelta = latitude2 - latitude1
-    let longitudeDelta = longitude2 - longitude1
+    let latitudeDelta = second.latitude - first.latitude
+    let longitudeDelta = second.longitude - first.longitude
     let haversine = pow(sin(latitudeDelta / 2), 2)
-        + cos(latitude1) * cos(latitude2) * pow(sin(longitudeDelta / 2), 2)
-    return 6_371.0088 * 2 * asin(min(1, sqrt(haversine)))
+        + cos(first.latitude) * cos(second.latitude) * pow(sin(longitudeDelta / 2), 2)
+    return earthMeanRadiusKM * 2 * asin(min(1, sqrt(haversine)))
 }

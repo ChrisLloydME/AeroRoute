@@ -36,6 +36,13 @@ struct AirportLocationMatchTests {
         ))
         #expect(remote.resolution == .noMatches)
         #expect(remote.candidates.isEmpty)
+
+        let invalidRequest = Self.engine.airports(near: .init(
+            coordinate: .init(latitude: 0, longitude: 0),
+            limit: 0
+        ))
+        #expect(invalidRequest.resolution == .invalidRequest)
+        #expect(invalidRequest.candidates.isEmpty)
     }
 
     @Test func equidistantNearbyAirportsRequireManualSelection() {
@@ -64,6 +71,15 @@ struct AirportLocationMatchTests {
         #expect(response.resolution == .manualSelection)
         #expect(response.automaticSelection == nil)
         #expect(response.candidates.first?.airport.iataCode == "SIN")
+
+        let oneVisibleCandidate = Self.engine.airports(near: .init(
+            coordinate: midpoint,
+            limit: 1,
+            maximumDistanceKM: 25
+        ))
+        #expect(oneVisibleCandidate.candidates.count == 1)
+        #expect(oneVisibleCandidate.resolution == .manualSelection)
+        #expect(oneVisibleCandidate.automaticSelection == nil)
     }
 
     @Test(arguments: airportTrackFixtures)
@@ -103,6 +119,25 @@ struct AirportLocationMatchTests {
             == ["PVG", "SIN", "CPH"])
         #expect(responses.map { $0.match.automaticDestination?.airport.iataCode }
             == ["MUC", "EWR", "KEF"])
+    }
+
+    @Test func invalidTrackOptionsNeverProduceAutomaticMatches() throws {
+        let imported = try loadFR24(
+            airportLocationExampleData.appending(path: "lh727.csv")
+        )
+        let invalidOptions = AirportTrackMatchOptions(
+            evidenceWindowSeconds: .nan
+        )
+
+        let response = Self.engine.matchAirports(
+            for: imported.track,
+            options: invalidOptions
+        )
+
+        #expect(response.origin.resolution == .invalidRequest)
+        #expect(response.destination.resolution == .invalidRequest)
+        #expect(response.automaticOrigin == nil)
+        #expect(response.automaticDestination == nil)
     }
 }
 

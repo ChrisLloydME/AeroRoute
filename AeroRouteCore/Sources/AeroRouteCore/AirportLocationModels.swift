@@ -33,6 +33,10 @@ public struct AirportProximityRequest: Sendable, Equatable {
         self.maximumDistanceKM = maximumDistanceKM
         self.prefersScheduledService = prefersScheduledService
     }
+
+    public var hasValidParameters: Bool {
+        limit > 0 && maximumDistanceKM.isFinite && maximumDistanceKM > 0
+    }
 }
 
 public enum AirportLocationConfidence: String, Sendable, Equatable, Comparable {
@@ -77,6 +81,7 @@ public struct AirportProximityCandidate: Sendable, Equatable, Identifiable {
 
 public enum AirportLocationResolution: String, Sendable, Equatable, CaseIterable {
     case invalidCoordinate
+    case invalidRequest
     case noMatches
     case manualSelection
     case automaticSelection
@@ -125,6 +130,14 @@ public struct AirportTrackMatchOptions: Sendable, Equatable {
         self.supportingRadiusKM = supportingRadiusKM
         self.prefersScheduledService = prefersScheduledService
     }
+
+    public var isValid: Bool {
+        limit > 0
+            && maximumDistanceKM.isFinite && maximumDistanceKM > 0
+            && evidenceWindowSeconds.isFinite && evidenceWindowSeconds >= 0
+            && maximumEvidencePoints > 0
+            && supportingRadiusKM.isFinite && supportingRadiusKM >= 0
+    }
 }
 
 public struct AirportTrackMatchResponse: Sendable, Equatable {
@@ -151,18 +164,20 @@ public struct AirportTrackMatchResponse: Sendable, Equatable {
 public struct AirportFileMatchResponse: Sendable, Equatable, Identifiable {
     /// Stable within one input batch, even if the same URL appears more than once.
     public let inputIndex: Int
+    /// The source of the track that was actually analyzed.
+    public let source: URL
     public let metadata: FR24Metadata
     public let match: AirportTrackMatchResponse
 
     public var id: Int { inputIndex }
-    public var source: URL { metadata.source }
-
     public init(
         inputIndex: Int,
+        source: URL,
         metadata: FR24Metadata,
         match: AirportTrackMatchResponse
     ) {
         self.inputIndex = inputIndex
+        self.source = source
         self.metadata = metadata
         self.match = match
     }

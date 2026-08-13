@@ -188,6 +188,9 @@ public struct AirportSearchResponse: Sendable, Equatable {
 }
 
 struct NormalizedAirportQuery: Sendable, Equatable {
+    static let maximumInputBytes = 1_024
+    static let maximumSignificantTokens = 16
+    static let maximumTokenBytes = 64
     private static let expansions = [
         "airpt": "airport",
         "apt": "airport",
@@ -211,7 +214,10 @@ struct NormalizedAirportQuery: Sendable, Equatable {
         normalized = airportSearchText(input)
         let rawTokens = normalized.split(separator: " ").map(String.init)
         tokens = rawTokens.map { Self.expansions[$0] ?? $0 }
-        significantTokens = tokens.filter { !Self.descriptorTerms.contains($0) }
+        var seen: Set<String> = []
+        significantTokens = tokens.filter {
+            !Self.descriptorTerms.contains($0) && seen.insert($0).inserted
+        }
         compact = significantTokens.joined()
 
         codeCandidates = rawTokens.compactMap { token in
@@ -227,6 +233,14 @@ struct NormalizedAirportQuery: Sendable, Equatable {
 
     var isEmpty: Bool {
         significantTokens.isEmpty
+    }
+
+    var isWithinSearchLimits: Bool {
+        original.utf8.count <= Self.maximumInputBytes
+            && significantTokens.count <= Self.maximumSignificantTokens
+            && significantTokens.allSatisfy {
+                $0.utf8.count <= Self.maximumTokenBytes
+            }
     }
 }
 

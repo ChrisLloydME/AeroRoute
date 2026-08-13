@@ -55,4 +55,25 @@ struct AirportSearchInterfaceTests {
         ).results
         #expect(Self.engine.suggestions(for: "heat", limit: 5) == editing)
     }
+
+    @Test func oversizedInputFailsClosedWithoutExpensiveFuzzyWork() {
+        let text = String(repeating: "heathrow", count: 200)
+        let request = AirportSearchRequest(text: text)
+
+        let response = Self.engine.lookup(request)
+
+        #expect(response.request == request)
+        #expect(response.normalizedText.isEmpty)
+        #expect(response.resolution == .noMatches)
+        #expect(response.results.isEmpty)
+    }
+
+    @Test func repeatedTermsDoNotAccumulateArtificialRelevance() {
+        let repeated = Self.engine.lookup(.init(text: "heathrow heathrow heathrow"))
+        let single = Self.engine.lookup(.init(text: "heathrow"))
+
+        #expect(repeated.results.first?.airport.id == single.results.first?.airport.id)
+        #expect(repeated.results.first?.score == single.results.first?.score)
+        #expect(repeated.results.first?.reasons == single.results.first?.reasons)
+    }
 }
