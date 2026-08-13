@@ -106,16 +106,10 @@ private struct FlightLegList: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Flight Information")
-                    .font(.headline)
-                Spacer()
-                Text("Double-click a CSV row to edit airport labels")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            Text("Flight Information")
+                .font(.headline)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
 
             HStack(spacing: 12) {
                 Text("Flight")
@@ -123,8 +117,6 @@ private struct FlightLegList: View {
                 Text("Airports")
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Text("Points")
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                Text("Connection")
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .font(.caption)
@@ -159,15 +151,6 @@ private struct FlightLegList: View {
                     Text(row.pointCount.formatted())
                         .monospacedDigit()
                         .frame(maxWidth: .infinity, alignment: .leading)
-
-                    Label(
-                        row.connection,
-                        systemImage: row.connects
-                            ? "checkmark.circle"
-                            : "exclamationmark.triangle"
-                    )
-                    .foregroundStyle(row.connects ? Color.secondary : Color.red)
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .lineLimit(1)
                 .tag(row.id)
