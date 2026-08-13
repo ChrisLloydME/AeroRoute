@@ -24,6 +24,32 @@ public struct MapViewport: Equatable, Sendable {
     }
 }
 
+/// The geographic bounds mapped into the fixed map viewport.
+public struct MapProjection: Equatable, Sendable {
+    public let minimumLongitude: Double
+    public let maximumLongitude: Double
+    public let minimumLatitude: Double
+    public let maximumLatitude: Double
+
+    public init(
+        minimumLongitude: Double,
+        maximumLongitude: Double,
+        minimumLatitude: Double,
+        maximumLatitude: Double
+    ) {
+        precondition(maximumLongitude > minimumLongitude)
+        precondition(maximumLatitude > minimumLatitude)
+        self.minimumLongitude = minimumLongitude
+        self.maximumLongitude = maximumLongitude
+        self.minimumLatitude = minimumLatitude
+        self.maximumLatitude = maximumLatitude
+    }
+
+    public var centerLongitude: Double {
+        (minimumLongitude + maximumLongitude) / 2
+    }
+}
+
 public enum AeroRouteGeometry {
     /// The flat-map drawing bounds used by the reference renderer.
     ///
@@ -55,6 +81,94 @@ public enum AeroRouteGeometry {
             + (latitudeMaximum - latitude) / (latitudeMaximum - latitudeMinimum)
             * (viewport.bottom - viewport.top)
         return Point2D(x: x, y: y)
+    }
+
+    /// Projects WGS84 coordinates into a caller-provided geographic region.
+    public static func project(
+        longitude: Double,
+        latitude: Double,
+        width: Double,
+        height: Double,
+        projection: MapProjection,
+        viewport: MapViewport? = nil
+    ) -> Point2D {
+        let viewport = viewport ?? mapViewport(width: width, height: height)
+        let x = viewport.left
+            + (longitude - projection.minimumLongitude)
+            / (projection.maximumLongitude - projection.minimumLongitude)
+            * (viewport.right - viewport.left)
+        let y = viewport.top
+            + (projection.maximumLatitude - latitude)
+            / (projection.maximumLatitude - projection.minimumLatitude)
+            * (viewport.bottom - viewport.top)
+        return Point2D(x: x, y: y)
+    }
+
+    /// Builds an aspect-fitted region around a flight track with editorial
+    /// breathing room. Longitudes are unwrapped before measuring the bounds.
+    public static func routeFittingProjection(
+        coordinates: [(longitude: Double, latitude: Double)],
+        width: Double,
+        height: Double,
+        viewport: MapViewport? = nil,
+        paddingFraction: Double = 0.08
+    ) -> MapProjection {
+        precondition(!coordinates.isEmpty)
+        precondition(width > 0 && height > 0)
+        precondition(paddingFraction >= 0)
+
+        let unwrapped = unwrapLongitudes(coordinates)
+        let longitudes = unwrapped.map(\.longitude)
+        let latitudes = unwrapped.map(\.latitude)
+        let longitudeCenter = (longitudes.min()! + longitudes.max()!) / 2
+        let latitudeCenter = (latitudes.min()! + latitudes.max()!) / 2
+        var longitudeSpan = max(longitudes.max()! - longitudes.min()!, 2)
+        var latitudeSpan = max(latitudes.max()! - latitudes.min()!, 2)
+
+        let paddingScale = 1 + paddingFraction * 2
+        longitudeSpan *= paddingScale
+        latitudeSpan *= paddingScale
+
+        let viewport = viewport ?? mapViewport(width: width, height: height)
+        let viewportAspect = (viewport.right - viewport.left)
+            / (viewport.bottom - viewport.top)
+        if longitudeSpan / latitudeSpan < viewportAspect {
+            longitudeSpan = latitudeSpan * viewportAspect
+        } else {
+            latitudeSpan = longitudeSpan / viewportAspect
+        }
+
+        return MapProjection(
+            minimumLongitude: longitudeCenter - longitudeSpan / 2,
+            maximumLongitude: longitudeCenter + longitudeSpan / 2,
+            minimumLatitude: latitudeCenter - latitudeSpan / 2,
+            maximumLatitude: latitudeCenter + latitudeSpan / 2
+        )
+    }
+
+    /// Keeps the full legacy world extent while rotating its longitude seam
+    /// so the route's unwrapped east-west bounds are centered on the canvas.
+    public static func routeCenteredWorldProjection(
+        coordinates: [(longitude: Double, latitude: Double)]
+    ) -> MapProjection {
+        precondition(!coordinates.isEmpty)
+
+        let longitudes = unwrapLongitudes(coordinates).map(\.longitude)
+        let center = (longitudes.min()! + longitudes.max()!) / 2
+        return MapProjection(
+            minimumLongitude: center - 180,
+            maximumLongitude: center + 180,
+            minimumLatitude: -60,
+            maximumLatitude: 85
+        )
+    }
+
+    /// Returns the equivalent longitude nearest the projection center.
+    public static func longitudeNearestProjectionCenter(
+        _ longitude: Double,
+        projection: MapProjection
+    ) -> Double {
+        longitude + (360 * ((projection.centerLongitude - longitude) / 360).rounded())
     }
 
     /// Keeps adjacent longitudes continuous when a track crosses the
@@ -202,6 +316,66 @@ public enum AeroRouteGeometry {
                     "L \(formatCoordinate($0.x)) \(formatCoordinate($0.y))"
                 })
                 commands.append("Z")
+            }
+        }
+        return commands.joined(separator: " ")
+    }
+
+    /// Converts GeoJSON into a path for a focused projection, moving each
+    /// complete ring to the world copy nearest the flight.
+    public static func geoJSONPath(
+        geometry: GeoJSONGeometry,
+        width: Double,
+        height: Double,
+        projection: MapProjection,
+        viewport: MapViewport? = nil,
+        includeAdjacentWorldCopies: Bool = false
+    ) -> String {
+        let polygons: [GeoJSONPolygonCoordinates]
+        switch geometry {
+        case .polygon(let coordinates):
+            polygons = [coordinates]
+        case .multiPolygon(let coordinates):
+            polygons = coordinates
+        case .unsupported:
+            return ""
+        }
+
+        var commands: [String] = []
+        for polygon in polygons {
+            for ring in polygon where !ring.isEmpty {
+                let coordinates = unwrapLongitudes(
+                    ring.map { ($0.longitude, $0.latitude) }
+                )
+                let ringCenter = coordinates.map(\.longitude).reduce(0, +)
+                    / Double(coordinates.count)
+                let shift = longitudeNearestProjectionCenter(
+                    ringCenter,
+                    projection: projection
+                ) - ringCenter
+                let shifts = includeAdjacentWorldCopies
+                    ? [shift - 360, shift, shift + 360]
+                    : [shift]
+                for worldShift in shifts {
+                    let projected = coordinates.map {
+                        project(
+                            longitude: $0.longitude + worldShift,
+                            latitude: $0.latitude,
+                            width: width,
+                            height: height,
+                            projection: projection,
+                            viewport: viewport
+                        )
+                    }
+                    guard let first = projected.first else { continue }
+                    commands.append(
+                        "M \(formatCoordinate(first.x)) \(formatCoordinate(first.y))"
+                    )
+                    commands.append(contentsOf: projected.dropFirst().map {
+                        "L \(formatCoordinate($0.x)) \(formatCoordinate($0.y))"
+                    })
+                    commands.append("Z")
+                }
             }
         }
         return commands.joined(separator: " ")

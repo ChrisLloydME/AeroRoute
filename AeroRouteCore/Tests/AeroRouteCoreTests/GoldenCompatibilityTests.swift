@@ -218,6 +218,57 @@ final class GoldenCompatibilityTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: destination), Data(built.svg.utf8))
     }
 
+    func testRouteFittingRenderFillsMapViewport() throws {
+        let track = try Self.loadFixtureTrack(Self.fixtures[0])
+        let rendered = try SVGRenderer.buildSVG(
+            track: track,
+            options: RenderOptions(fitMapToRoute: true)
+        )
+        let viewport = MapViewport(left: 0, top: 0, right: 1_600, bottom: 1_000)
+
+        XCTAssertTrue(rendered.svg.contains("data-map-scope=\"route\""))
+        XCTAssertTrue(
+            rendered.svg.contains(
+                "<rect x=\"0.000\" y=\"0.000\" width=\"1600.000\" height=\"1000.000\" />"
+            )
+        )
+        XCTAssertGreaterThan(abs(rendered.stats.endXY.x - rendered.stats.startXY.x), 500)
+        XCTAssertGreaterThanOrEqual(rendered.stats.startXY.x, viewport.left)
+        XCTAssertLessThanOrEqual(rendered.stats.startXY.x, viewport.right)
+        XCTAssertGreaterThanOrEqual(rendered.stats.endXY.y, viewport.top)
+        XCTAssertLessThanOrEqual(rendered.stats.endXY.y, viewport.bottom)
+    }
+
+    func testRouteCenteredWorldRenderKeepsOriginalWorldViewport() throws {
+        let track = try Self.loadFixtureTrack(Self.fixtures[6])
+        let rendered = try SVGRenderer.buildSVG(
+            track: track,
+            options: RenderOptions(centerRouteOnWorldMap: true)
+        )
+
+        XCTAssertTrue(rendered.svg.contains("data-map-scope=\"world-route-centered\""))
+        XCTAssertTrue(rendered.svg.contains("data-map-center-longitude=\""))
+        XCTAssertTrue(
+            rendered.svg.contains(
+                "<rect x=\"0.000\" y=\"190.000\" width=\"1600.000\" height=\"630.000\" />"
+            )
+        )
+    }
+
+    func testRouteFittingTakesPrecedenceOverCenteredWorld() throws {
+        let track = try Self.loadFixtureTrack(Self.fixtures[0])
+        let rendered = try SVGRenderer.buildSVG(
+            track: track,
+            options: RenderOptions(
+                fitMapToRoute: true,
+                centerRouteOnWorldMap: true
+            )
+        )
+
+        XCTAssertTrue(rendered.svg.contains("data-map-scope=\"route\""))
+        XCTAssertFalse(rendered.svg.contains("world-route-centered"))
+    }
+
     func testOrderedXMLSerializationMatchesElementTreeConventions() {
         let root = OrderedXMLNode(
             "svg",

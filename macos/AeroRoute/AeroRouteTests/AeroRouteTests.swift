@@ -140,6 +140,75 @@ final class AeroRouteTests: XCTestCase {
     }
 
     @MainActor
+    func testFitMapToRouteSettingReframesPreviewAndExport() async throws {
+        let workspace = RouteWorkspace()
+        workspace.importURLs([example("sk2596.csv")])
+        try await waitForIdle(workspace)
+        let worldWidth = abs(
+            try XCTUnwrap(workspace.previewStats?.endXY.x)
+                - XCTUnwrap(workspace.previewStats?.startXY.x)
+        )
+
+        workspace.settings.fitMapToRoute = true
+        workspace.scheduleRender()
+        try await waitForIdle(workspace)
+
+        let focusedWidth = abs(
+            try XCTUnwrap(workspace.previewStats?.endXY.x)
+                - XCTUnwrap(workspace.previewStats?.startXY.x)
+        )
+        XCTAssertGreaterThan(focusedWidth, worldWidth * 5)
+        XCTAssertTrue(workspace.previewSVG?.contains("data-map-scope=\"route\"") == true)
+
+        workspace.prepareExport()
+        try await waitForIdle(workspace)
+        let exportData = try XCTUnwrap(workspace.exportDocument?.data)
+        let exportSVG = try XCTUnwrap(String(data: exportData, encoding: .utf8))
+        XCTAssertTrue(exportSVG.contains("data-map-scope=\"route\""))
+    }
+
+    @MainActor
+    func testCenterRouteOnWorldMapSettingReframesPreviewAndExport() async throws {
+        let workspace = RouteWorkspace()
+        workspace.importURLs([example("sq22.csv")])
+        try await waitForIdle(workspace)
+
+        workspace.settings.centerRouteOnWorldMap = true
+        workspace.scheduleRender()
+        try await waitForIdle(workspace)
+
+        XCTAssertTrue(
+            workspace.previewSVG?.contains(
+                "data-map-scope=\"world-route-centered\""
+            ) == true
+        )
+        XCTAssertTrue(
+            workspace.previewSVG?.contains("data-map-center-longitude=\"") == true
+        )
+
+        workspace.prepareExport()
+        try await waitForIdle(workspace)
+        let exportData = try XCTUnwrap(workspace.exportDocument?.data)
+        let exportSVG = try XCTUnwrap(String(data: exportData, encoding: .utf8))
+        XCTAssertTrue(exportSVG.contains("data-map-scope=\"world-route-centered\""))
+    }
+
+    @MainActor
+    func testFitMapToRouteTakesPrecedenceInWorkspace() async throws {
+        let workspace = RouteWorkspace()
+        workspace.importURLs([example("sk2596.csv")])
+        try await waitForIdle(workspace)
+
+        workspace.settings.centerRouteOnWorldMap = true
+        workspace.settings.fitMapToRoute = true
+        workspace.scheduleRender()
+        try await waitForIdle(workspace)
+
+        XCTAssertTrue(workspace.previewSVG?.contains("data-map-scope=\"route\"") == true)
+        XCTAssertFalse(workspace.previewSVG?.contains("world-route-centered") == true)
+    }
+
+    @MainActor
     func testAirportLabelsCanBeEditedFromTheirCSVLeg() async throws {
         let workspace = RouteWorkspace()
         workspace.importURLs([

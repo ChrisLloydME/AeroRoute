@@ -15,6 +15,15 @@ struct RouteInspector: View {
                 Toggle("Country Labels", isOn: $workspace.settings.showCountryLabels)
                 Toggle("Airport Labels", isOn: $workspace.settings.showAirportLabels)
                 Toggle("Flight Metadata", isOn: $workspace.settings.showMetadata)
+                Toggle("Fit Map to Route", isOn: $workspace.settings.fitMapToRoute)
+                    .accessibilityIdentifier("route.fitMapToRoute")
+                Toggle(
+                    "Center Route on World Map",
+                    isOn: $workspace.settings.centerRouteOnWorldMap
+                )
+                    .disabled(workspace.settings.fitMapToRoute)
+                    .help("Show the complete world map with the route centered horizontally")
+                    .accessibilityIdentifier("route.centerOnWorldMap")
             }
 
             Section("Output") {

@@ -48,6 +48,8 @@ public struct RenderOptions: Equatable, Sendable {
     public var showCountryLabels: Bool
     public var showAirports: Bool
     public var showFlightNumber: Bool
+    public var fitMapToRoute: Bool
+    public var centerRouteOnWorldMap: Bool
     public var flightNumber: String?
     public var originCode: String?
     public var destinationCode: String?
@@ -66,6 +68,8 @@ public struct RenderOptions: Equatable, Sendable {
         showCountryLabels: Bool = false,
         showAirports: Bool = false,
         showFlightNumber: Bool = false,
+        fitMapToRoute: Bool = false,
+        centerRouteOnWorldMap: Bool = false,
         flightNumber: String? = nil,
         originCode: String? = nil,
         destinationCode: String? = nil,
@@ -83,6 +87,8 @@ public struct RenderOptions: Equatable, Sendable {
         self.showCountryLabels = showCountryLabels
         self.showAirports = showAirports
         self.showFlightNumber = showFlightNumber
+        self.fitMapToRoute = fitMapToRoute
+        self.centerRouteOnWorldMap = centerRouteOnWorldMap
         self.flightNumber = flightNumber
         self.originCode = originCode
         self.destinationCode = destinationCode
@@ -202,10 +208,36 @@ public enum SVGRenderer {
         )
 
         let definitions = root.add("defs")
-        let viewport = AeroRouteGeometry.mapViewport(
-            width: widthDouble,
-            height: heightDouble
+        let viewport = options.fitMapToRoute
+            ? MapViewport(left: 0, top: 0, right: widthDouble, bottom: heightDouble)
+            : AeroRouteGeometry.mapViewport(width: widthDouble, height: heightDouble)
+        let unwrapped = AeroRouteGeometry.unwrapLongitudes(
+            track.points.map { ($0.longitude, $0.latitude) }
         )
+        let projection: MapProjection?
+        if options.fitMapToRoute {
+            projection = AeroRouteGeometry.routeFittingProjection(
+                coordinates: unwrapped,
+                width: widthDouble,
+                height: heightDouble,
+                viewport: viewport
+            )
+        } else if options.centerRouteOnWorldMap {
+            projection = AeroRouteGeometry.routeCenteredWorldProjection(
+                coordinates: unwrapped
+            )
+        } else {
+            projection = nil
+        }
+        if options.fitMapToRoute {
+            root.setAttribute("data-map-scope", "route")
+        } else if let projection {
+            root.setAttribute("data-map-scope", "world-route-centered")
+            root.setAttribute(
+                "data-map-center-longitude",
+                fixed(projection.centerLongitude, digits: 6)
+            )
+        }
         let clipPath = definitions.add(
             "clipPath",
             attributes: [("id", "map-viewport")]
@@ -236,12 +268,18 @@ public enum SVGRenderer {
         let landPath = combinedMapPath(
             features: land.features,
             width: widthDouble,
-            height: heightDouble
+            height: heightDouble,
+            projection: projection,
+            viewport: viewport,
+            includeAdjacentWorldCopies: options.centerRouteOnWorldMap
         )
         let countryPath = combinedMapPath(
             features: countries.features,
             width: widthDouble,
-            height: heightDouble
+            height: heightDouble,
+            projection: projection,
+            viewport: viewport,
+            includeAdjacentWorldCopies: options.centerRouteOnWorldMap
         )
 
         mapLayers.add(
@@ -292,11 +330,13 @@ public enum SVGRenderer {
                 else {
                     continue
                 }
-                let point = AeroRouteGeometry.project(
+                let point = project(
                     longitude: longitude,
                     latitude: latitude,
                     width: widthDouble,
-                    height: heightDouble
+                    height: heightDouble,
+                    projection: projection,
+                    viewport: viewport
                 )
                 let label = addText(
                     to: labels,
@@ -312,15 +352,15 @@ public enum SVGRenderer {
             }
         }
 
-        let unwrapped = AeroRouteGeometry.unwrapLongitudes(
-            track.points.map { ($0.longitude, $0.latitude) }
-        )
         let projectedTrack = unwrapped.map {
-            AeroRouteGeometry.project(
+            project(
                 longitude: $0.longitude,
                 latitude: $0.latitude,
                 width: widthDouble,
-                height: heightDouble
+                height: heightDouble,
+                projection: projection,
+                viewport: viewport,
+                normalizeLongitude: false
             )
         }
         let route = AeroRouteGeometry.interpolatingBezierPath(projectedTrack)
@@ -348,7 +388,10 @@ public enum SVGRenderer {
         )
         let minimumX = projectedTrack.map(\.x).min()!
         let maximumX = projectedTrack.map(\.x).max()!
-        let mapWidth = viewport.right - viewport.left
+        let mapWidth = projection.map {
+            360 / ($0.maximumLongitude - $0.minimumLongitude)
+                * (viewport.right - viewport.left)
+        } ?? (viewport.right - viewport.left)
         for shift in -2...2 {
             let offset = Double(shift) * mapWidth
             if maximumX + offset < viewport.left
@@ -366,17 +409,21 @@ public enum SVGRenderer {
             routeGroup.add("path", attributes: attributes)
         }
 
-        let startXY = AeroRouteGeometry.project(
+        let startXY = project(
             longitude: track.start.longitude,
             latitude: track.start.latitude,
             width: widthDouble,
-            height: heightDouble
+            height: heightDouble,
+            projection: projection,
+            viewport: viewport
         )
-        let endXY = AeroRouteGeometry.project(
+        let endXY = project(
             longitude: track.end.longitude,
             latitude: track.end.latitude,
             width: widthDouble,
-            height: heightDouble
+            height: heightDouble,
+            projection: projection,
+            viewport: viewport
         )
         let markerGroup = root.add(
             "g",
@@ -384,11 +431,13 @@ public enum SVGRenderer {
         )
         let waypoints = track.waypoints
         for (index, waypoint) in waypoints.enumerated() {
-            let point = AeroRouteGeometry.project(
+            let point = project(
                 longitude: waypoint.longitude,
                 latitude: waypoint.latitude,
                 width: widthDouble,
-                height: heightDouble
+                height: heightDouble,
+                projection: projection,
+                viewport: viewport
             )
             let markerID: String
             if index == 0 {
@@ -419,7 +468,9 @@ public enum SVGRenderer {
                 options: options,
                 style: style,
                 width: widthDouble,
-                height: heightDouble
+                height: heightDouble,
+                projection: projection,
+                viewport: viewport
             )
         }
 
@@ -466,15 +517,30 @@ public enum SVGRenderer {
     private static func combinedMapPath(
         features: [GeoJSONFeature],
         width: Double,
-        height: Double
+        height: Double,
+        projection: MapProjection?,
+        viewport: MapViewport,
+        includeAdjacentWorldCopies: Bool
     ) -> String {
         features.compactMap { feature in
             guard let geometry = feature.geometry else { return nil }
-            let path = AeroRouteGeometry.geoJSONPath(
-                geometry: geometry,
-                width: width,
-                height: height
-            )
+            let path: String
+            if let projection {
+                path = AeroRouteGeometry.geoJSONPath(
+                    geometry: geometry,
+                    width: width,
+                    height: height,
+                    projection: projection,
+                    viewport: viewport,
+                    includeAdjacentWorldCopies: includeAdjacentWorldCopies
+                )
+            } else {
+                path = AeroRouteGeometry.geoJSONPath(
+                    geometry: geometry,
+                    width: width,
+                    height: height
+                )
+            }
             return path.isEmpty ? nil : path
         }.joined(separator: " ")
     }
@@ -485,7 +551,9 @@ public enum SVGRenderer {
         options: RenderOptions,
         style: MapStyle,
         width: Double,
-        height: Double
+        height: Double,
+        projection: MapProjection?,
+        viewport: MapViewport
     ) {
         let labels = root.add("g", attributes: [("id", "airport-labels")])
         let codes = options.waypointCodes.isEmpty
@@ -502,11 +570,13 @@ public enum SVGRenderer {
             let label = pieces.isEmpty
                 ? "STOP \(index + 1)"
                 : pieces.joined(separator: " · ")
-            let point = AeroRouteGeometry.project(
+            let point = project(
                 longitude: waypoint.longitude,
                 latitude: waypoint.latitude,
                 width: width,
-                height: height
+                height: height,
+                projection: projection,
+                viewport: viewport
             )
             let isFirst = index == 0
             addText(
@@ -521,6 +591,39 @@ public enum SVGRenderer {
                 anchor: isFirst ? "end" : "start"
             )
         }
+    }
+
+    private static func project(
+        longitude: Double,
+        latitude: Double,
+        width: Double,
+        height: Double,
+        projection: MapProjection?,
+        viewport: MapViewport,
+        normalizeLongitude: Bool = true
+    ) -> Point2D {
+        guard let projection else {
+            return AeroRouteGeometry.project(
+                longitude: longitude,
+                latitude: latitude,
+                width: width,
+                height: height
+            )
+        }
+        let projectedLongitude = normalizeLongitude
+            ? AeroRouteGeometry.longitudeNearestProjectionCenter(
+                longitude,
+                projection: projection
+            )
+            : longitude
+        return AeroRouteGeometry.project(
+            longitude: projectedLongitude,
+            latitude: latitude,
+            width: width,
+            height: height,
+            projection: projection,
+            viewport: viewport
+        )
     }
 
     private static func addMetadata(

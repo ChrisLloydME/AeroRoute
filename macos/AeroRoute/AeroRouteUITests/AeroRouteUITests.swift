@@ -23,6 +23,22 @@ final class AeroRouteUITests: XCTestCase {
     }
 
     @MainActor
+    func testInspectorOffersFitMapToRouteToggle() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        XCTAssertTrue(app.switches["route.fitMapToRoute"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testInspectorOffersCenterRouteOnWorldMapToggle() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        XCTAssertTrue(app.switches["route.centerOnWorldMap"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
     func testExampleItineraryIsReadyForExport() throws {
         let app = XCUIApplication()
         app.launchArguments = [
