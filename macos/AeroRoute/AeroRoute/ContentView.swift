@@ -31,7 +31,7 @@ struct ContentView: View {
                 } label: {
                     Label(
                         workspace.isMatchingAirports ? "Matching Airports…" : "Match Airports",
-                        systemImage: "mappin.and.ellipse"
+                        systemImage: "rectangle.and.pencil.and.ellipsis"
                     )
                 }
                 .disabled(
