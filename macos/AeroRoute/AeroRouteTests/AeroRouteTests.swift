@@ -63,6 +63,32 @@ final class AeroRouteTests: XCTestCase {
         )
     }
 
+    @MainActor
+    func testAirportSearchEngineAdapterConnectsCoreSearchToPicker() throws {
+        let adapter = try AirportSearchEngineAdapter()
+
+        let response = adapter.lookup(text: "pvg", phase: .submitted, limit: 8)
+
+        XCTAssertEqual(response.presentation, .automaticSelection)
+        XCTAssertEqual(response.automaticSelection?.code, "PVG")
+        XCTAssertEqual(
+            response.automaticSelection?.name,
+            "Shanghai Pudong International Airport"
+        )
+        XCTAssertEqual(response.automaticSelection?.isExactCodeMatch, true)
+        XCTAssertTrue(response.candidates.allSatisfy { $0.code.count == 3 })
+    }
+
+    @MainActor
+    func testAirportSearchEngineAdapterDoesNotTreatICAOAsEditableIATACode() throws {
+        let adapter = try AirportSearchEngineAdapter()
+
+        let response = adapter.lookup(text: "ZSPD", phase: .submitted, limit: 8)
+
+        XCTAssertEqual(response.automaticSelection?.code, "PVG")
+        XCTAssertEqual(response.automaticSelection?.isExactCodeMatch, false)
+    }
+
     func testSVGCanBeRasterizedAsPNG() throws {
         let svg = """
         <svg xmlns="http://www.w3.org/2000/svg" width="32" height="20" viewBox="0 0 32 20">
