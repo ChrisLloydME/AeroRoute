@@ -316,46 +316,38 @@ private struct AirportSearchPicker: View {
     @State private var selectedAirportID: AirportSearchCandidate.ID?
 
     var body: some View {
-        NavigationStack {
-            Group {
-                switch search.availability {
-                case .loading:
-                    ProgressView("Loading airports…")
-                case let .unavailable(message):
-                    ContentUnavailableView(
-                        "Airport Search Unavailable",
-                        systemImage: "exclamationmark.triangle",
-                        description: Text(message)
-                    )
-                case .ready:
-                    results
-                }
+        Group {
+            switch search.availability {
+            case .loading:
+                ProgressView("Loading airports…")
+            case let .unavailable(message):
+                ContentUnavailableView(
+                    "Airport Search Unavailable",
+                    systemImage: "exclamationmark.triangle",
+                    description: Text(message)
+                )
+            case .ready:
+                results
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .airportSearchBar(text: $query) {
-                lookup(phase: .submitted)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .airportSearchBar(text: $query) {
+            lookup(phase: .submitted)
+        }
+        .airportPickerActions(
+            canApply: selectedAirport != nil,
+            onCancel: { dismiss() },
+            onApply: {
+                guard let selectedAirport else { return }
+                onSelect(selectedAirport)
             }
-            .navigationTitle("Search Airports")
-            .onChange(of: query) {
-                if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    response = nil
-                    selectedAirportID = nil
-                } else {
-                    lookup(phase: .editing)
-                }
-            }
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Apply") {
-                        guard let selectedAirport else { return }
-                        onSelect(selectedAirport)
-                    }
-                    .disabled(selectedAirport == nil)
-                    .keyboardShortcut(.defaultAction)
-                }
+        )
+        .onChange(of: query) {
+            if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                response = nil
+                selectedAirportID = nil
+            } else {
+                lookup(phase: .editing)
             }
         }
     }
@@ -508,6 +500,73 @@ private extension View {
                     .padding(.vertical, 8)
                     .background(.bar)
             }
+        }
+    }
+
+    @ViewBuilder
+    func airportPickerActions(
+        canApply: Bool,
+        onCancel: @escaping () -> Void,
+        onApply: @escaping () -> Void
+    ) -> some View {
+        if #available(macOS 26.0, iOS 26.0, *) {
+            safeAreaBar(edge: .bottom, spacing: 0) {
+                AirportPickerActionBar(
+                    canApply: canApply,
+                    onCancel: onCancel,
+                    onApply: onApply
+                )
+            }
+            .scrollEdgeEffectStyle(.soft, for: .bottom)
+        } else {
+            safeAreaInset(edge: .bottom, spacing: 0) {
+                AirportPickerActionBar(
+                    canApply: canApply,
+                    onCancel: onCancel,
+                    onApply: onApply
+                )
+                .padding(.vertical, 8)
+                .background(.bar)
+            }
+        }
+    }
+}
+
+private struct AirportPickerActionBar: View {
+    let canApply: Bool
+    let onCancel: () -> Void
+    let onApply: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Spacer()
+            cancelButton
+            applyButton
+        }
+        .padding(.horizontal, 16)
+    }
+
+    @ViewBuilder
+    private var cancelButton: some View {
+        if #available(macOS 26.0, iOS 26.0, *) {
+            Button("Cancel", action: onCancel)
+                .buttonStyle(.glass)
+        } else {
+            Button("Cancel", action: onCancel)
+        }
+    }
+
+    @ViewBuilder
+    private var applyButton: some View {
+        if #available(macOS 26.0, iOS 26.0, *) {
+            Button("Apply", action: onApply)
+                .buttonStyle(.glassProminent)
+                .disabled(!canApply)
+                .keyboardShortcut(.defaultAction)
+        } else {
+            Button("Apply", action: onApply)
+                .disabled(!canApply)
+                .keyboardShortcut(.defaultAction)
         }
     }
 }
