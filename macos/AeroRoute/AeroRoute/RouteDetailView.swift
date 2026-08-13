@@ -317,16 +317,7 @@ private struct AirportSearchPicker: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                TextField("Search by code, airport, city, or country", text: $query)
-                    .textFieldStyle(.roundedBorder)
-                    .padding(12)
-                    .onSubmit {
-                        lookup(phase: .submitted)
-                    }
-
-                Divider()
-
+            Group {
                 switch search.availability {
                 case .loading:
                     ProgressView("Loading airports…")
@@ -340,7 +331,16 @@ private struct AirportSearchPicker: View {
                     results
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .navigationTitle("Search Airports")
+            .searchable(
+                text: $query,
+                placement: .toolbarPrincipal,
+                prompt: "Code, airport, city, or country"
+            )
+            .onSubmit(of: .search) {
+                lookup(phase: .submitted)
+            }
             .onChange(of: query) {
                 if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     response = nil
@@ -372,21 +372,31 @@ private struct AirportSearchPicker: View {
                 AirportSearchResultRow(airport: airport)
                     .tag(airport.id)
             }
-        } else if response?.presentation == .noMatches {
-            ContentUnavailableView.search(text: query)
+        } else if !trimmedQuery.isEmpty {
+            ContentUnavailableView(
+                "No Results",
+                systemImage: "magnifyingglass",
+                description: Text("No airports match “\(trimmedQuery)”.")
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             ContentUnavailableView(
                 "No Airports Available",
                 systemImage: "airplane",
                 description: Text("Airport data will appear here when it is available.")
             )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
     private var displayedAirports: [AirportSearchCandidate] {
-        query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        trimmedQuery.isEmpty
             ? search.airportsAlphabetically()
             : response?.candidates ?? []
+    }
+
+    private var trimmedQuery: String {
+        query.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private var selectedAirport: AirportSearchCandidate? {
