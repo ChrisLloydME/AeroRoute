@@ -28,10 +28,28 @@ result by design.
 
 ## Recall and ranking
 
-The engine builds in-memory indexes over names, cities, countries, codes, and
-OurAirports keywords. A query recalls a compact candidate set through exact
-words, prefixes, codes, acronyms, and trigrams before detailed scoring. Strong
-signals are deliberately separated from weaker signals:
+The engine builds in-memory posting lists over names, cities, countries, codes,
+and OurAirports keywords. The term dictionary is kept in lexical order, so a
+binary lower-bound lookup can enumerate a prefix range without materializing
+every possible prefix during initialization.
+
+Fuzzy recall uses a separate prepared term index. Terms are grouped by UTF-8
+length and store normalized bytes plus a compact character-presence mask. A
+query runs increasingly expensive, recall-safe filters:
+
+1. possible term lengths;
+2. missing-character mask count;
+3. a conservative trigram lower bound for longer terms;
+4. bounded optimal-string-alignment distance using three reusable rows.
+
+This design borrows [FuzzyMatch](https://github.com/ordo-one/FuzzyMatch)'s
+prepared-query and prefilter pipeline while specializing it for the engine's
+already normalized English ASCII vocabulary. It borrows
+[MiniSearch](https://github.com/lucaong/minisearch)'s term-to-posting structure,
+ordered prefix lookup, and inverse-document-frequency ranking. It does not
+embed either project or require a JavaScript runtime.
+
+Strong signals are deliberately separated from weaker signals:
 
 1. exact IATA or ICAO code;
 2. exact airport name or city;
@@ -40,9 +58,15 @@ signals are deliberately separated from weaker signals:
 5. name/alias acronym;
 6. all meaningful query terms found across name, city, country, country code,
    codes, and upstream keywords, regardless of word order;
-7. bounded Damerau-Levenshtein recovery for missing, extra, substituted, or
-   transposed characters;
-8. trigram similarity for merged words and longer phrase errors.
+7. bounded edit recovery for missing, extra, substituted, or transposed
+   characters;
+8. compact-field correction for merged words and longer phrase errors.
+
+Exact, prefix, and corrected terms receive a capped inverse-document-frequency
+bonus. Distinctive terms such as `heathrow` therefore contribute more than
+common terms, without allowing statistical relevance to outrank an exact code
+or exact airport identity. Alias-only fuzzy evidence is deliberately weaker
+than airport-name and city evidence.
 
 Small bonuses prefer airports with scheduled service, an IATA code, and a large
 or medium classification. These bonuses never outrank a stronger match class.
@@ -96,10 +120,37 @@ The suggestion policy differs intentionally from a submitted `search`:
 - exact and prefix matches are available immediately;
 - fuzzy text matching begins at four characters;
 - fuzzy airport-code correction stays disabled while typing;
+- one- and two-character inputs cap detailed scoring to 512 important
+  candidates while preserving exact code and acronym candidates;
 - the default result limit is eight.
 
 This prevents a partially typed real code from being “corrected” to an unrelated
-airport. A UI may debounce calls by roughly 50–100 ms to avoid unnecessary view
-updates, but the engine itself is synchronous and keeps no mutable query state.
-Once the user submits the field, call `search(_:limit:)` to enable the complete
-fuzzy policy.
+airport. A UI may still debounce view updates, but the engine itself is
+synchronous and keeps no mutable query state. Once the user submits the field,
+call `search(_:limit:)` to enable the complete fuzzy policy.
+
+## Quality and performance regression set
+
+`AirportSearchQualityTests` keeps representative exact, descriptive, typo,
+incremental-prefix, and negative queries executable against the bundled
+database. The typo set includes transposition, insertion, deletion,
+substitution, multi-term errors, and merged phrases.
+
+On the same arm64 machine and Release build on 2026-08-13, comparing commit
+`4b7e745` with the optimized implementation using the same test cases:
+
+| Workload | Before | After |
+| --- | ---: | ---: |
+| Engine construction plus 12 exact/descriptive queries | 944 ms | 314 ms |
+| 10 representative typo queries after construction | 154 ms | 2 ms |
+| 3 incremental Schiphol prefix queries | 48 ms | 1 ms |
+| Typo Top-1 accuracy | 8/10 | 10/10 |
+
+These figures are regression evidence rather than cross-device guarantees. Run
+the Release quality suite after changing index construction, edit thresholds,
+or field weights:
+
+```sh
+cd AeroRouteCore
+swift test -c release --filter AirportSearchQualityTests
+```
