@@ -89,9 +89,10 @@ public enum AeroRouteGeometry {
         latitude: Double,
         width: Double,
         height: Double,
-        projection: MapProjection
+        projection: MapProjection,
+        viewport: MapViewport? = nil
     ) -> Point2D {
-        let viewport = mapViewport(width: width, height: height)
+        let viewport = viewport ?? mapViewport(width: width, height: height)
         let x = viewport.left
             + (longitude - projection.minimumLongitude)
             / (projection.maximumLongitude - projection.minimumLongitude)
@@ -109,6 +110,7 @@ public enum AeroRouteGeometry {
         coordinates: [(longitude: Double, latitude: Double)],
         width: Double,
         height: Double,
+        viewport: MapViewport? = nil,
         paddingFraction: Double = 0.08
     ) -> MapProjection {
         precondition(!coordinates.isEmpty)
@@ -127,7 +129,7 @@ public enum AeroRouteGeometry {
         longitudeSpan *= paddingScale
         latitudeSpan *= paddingScale
 
-        let viewport = mapViewport(width: width, height: height)
+        let viewport = viewport ?? mapViewport(width: width, height: height)
         let viewportAspect = (viewport.right - viewport.left)
             / (viewport.bottom - viewport.top)
         if longitudeSpan / latitudeSpan < viewportAspect {
@@ -308,7 +310,8 @@ public enum AeroRouteGeometry {
         geometry: GeoJSONGeometry,
         width: Double,
         height: Double,
-        projection: MapProjection
+        projection: MapProjection,
+        viewport: MapViewport? = nil
     ) -> String {
         let polygons: [GeoJSONPolygonCoordinates]
         switch geometry {
@@ -338,7 +341,8 @@ public enum AeroRouteGeometry {
                         latitude: $0.latitude,
                         width: width,
                         height: height,
-                        projection: projection
+                        projection: projection,
+                        viewport: viewport
                     )
                 }
                 guard let first = projected.first else { continue }

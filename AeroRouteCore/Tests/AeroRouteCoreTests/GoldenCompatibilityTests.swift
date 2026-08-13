@@ -224,9 +224,14 @@ final class GoldenCompatibilityTests: XCTestCase {
             track: track,
             options: RenderOptions(zoomToFlight: true)
         )
-        let viewport = AeroRouteGeometry.mapViewport(width: 1_600, height: 1_000)
+        let viewport = MapViewport(left: 0, top: 0, right: 1_600, bottom: 1_000)
 
         XCTAssertTrue(rendered.svg.contains("data-map-scope=\"flight\""))
+        XCTAssertTrue(
+            rendered.svg.contains(
+                "<rect x=\"0\" y=\"0\" width=\"1600\" height=\"1000\" />"
+            )
+        )
         XCTAssertGreaterThan(abs(rendered.stats.endXY.x - rendered.stats.startXY.x), 500)
         XCTAssertGreaterThanOrEqual(rendered.stats.startXY.x, viewport.left)
         XCTAssertLessThanOrEqual(rendered.stats.startXY.x, viewport.right)

@@ -205,10 +205,9 @@ public enum SVGRenderer {
         )
 
         let definitions = root.add("defs")
-        let viewport = AeroRouteGeometry.mapViewport(
-            width: widthDouble,
-            height: heightDouble
-        )
+        let viewport = options.zoomToFlight
+            ? MapViewport(left: 0, top: 0, right: widthDouble, bottom: heightDouble)
+            : AeroRouteGeometry.mapViewport(width: widthDouble, height: heightDouble)
         let unwrapped = AeroRouteGeometry.unwrapLongitudes(
             track.points.map { ($0.longitude, $0.latitude) }
         )
@@ -216,7 +215,8 @@ public enum SVGRenderer {
             ? AeroRouteGeometry.flightFocusedProjection(
                 coordinates: unwrapped,
                 width: widthDouble,
-                height: heightDouble
+                height: heightDouble,
+                viewport: viewport
             )
             : nil
         if options.zoomToFlight {
@@ -253,13 +253,15 @@ public enum SVGRenderer {
             features: land.features,
             width: widthDouble,
             height: heightDouble,
-            projection: projection
+            projection: projection,
+            viewport: viewport
         )
         let countryPath = combinedMapPath(
             features: countries.features,
             width: widthDouble,
             height: heightDouble,
-            projection: projection
+            projection: projection,
+            viewport: viewport
         )
 
         mapLayers.add(
@@ -315,7 +317,8 @@ public enum SVGRenderer {
                     latitude: latitude,
                     width: widthDouble,
                     height: heightDouble,
-                    projection: projection
+                    projection: projection,
+                    viewport: viewport
                 )
                 let label = addText(
                     to: labels,
@@ -338,6 +341,7 @@ public enum SVGRenderer {
                 width: widthDouble,
                 height: heightDouble,
                 projection: projection,
+                viewport: viewport,
                 normalizeLongitude: false
             )
         }
@@ -392,14 +396,16 @@ public enum SVGRenderer {
             latitude: track.start.latitude,
             width: widthDouble,
             height: heightDouble,
-            projection: projection
+            projection: projection,
+            viewport: viewport
         )
         let endXY = project(
             longitude: track.end.longitude,
             latitude: track.end.latitude,
             width: widthDouble,
             height: heightDouble,
-            projection: projection
+            projection: projection,
+            viewport: viewport
         )
         let markerGroup = root.add(
             "g",
@@ -412,7 +418,8 @@ public enum SVGRenderer {
                 latitude: waypoint.latitude,
                 width: widthDouble,
                 height: heightDouble,
-                projection: projection
+                projection: projection,
+                viewport: viewport
             )
             let markerID: String
             if index == 0 {
@@ -444,7 +451,8 @@ public enum SVGRenderer {
                 style: style,
                 width: widthDouble,
                 height: heightDouble,
-                projection: projection
+                projection: projection,
+                viewport: viewport
             )
         }
 
@@ -492,7 +500,8 @@ public enum SVGRenderer {
         features: [GeoJSONFeature],
         width: Double,
         height: Double,
-        projection: MapProjection?
+        projection: MapProjection?,
+        viewport: MapViewport
     ) -> String {
         features.compactMap { feature in
             guard let geometry = feature.geometry else { return nil }
@@ -502,7 +511,8 @@ public enum SVGRenderer {
                     geometry: geometry,
                     width: width,
                     height: height,
-                    projection: projection
+                    projection: projection,
+                    viewport: viewport
                 )
             } else {
                 path = AeroRouteGeometry.geoJSONPath(
@@ -522,7 +532,8 @@ public enum SVGRenderer {
         style: MapStyle,
         width: Double,
         height: Double,
-        projection: MapProjection?
+        projection: MapProjection?,
+        viewport: MapViewport
     ) {
         let labels = root.add("g", attributes: [("id", "airport-labels")])
         let codes = options.waypointCodes.isEmpty
@@ -544,7 +555,8 @@ public enum SVGRenderer {
                 latitude: waypoint.latitude,
                 width: width,
                 height: height,
-                projection: projection
+                projection: projection,
+                viewport: viewport
             )
             let isFirst = index == 0
             addText(
@@ -567,6 +579,7 @@ public enum SVGRenderer {
         width: Double,
         height: Double,
         projection: MapProjection?,
+        viewport: MapViewport,
         normalizeLongitude: Bool = true
     ) -> Point2D {
         guard let projection else {
@@ -588,7 +601,8 @@ public enum SVGRenderer {
             latitude: latitude,
             width: width,
             height: height,
-            projection: projection
+            projection: projection,
+            viewport: viewport
         )
     }
 
