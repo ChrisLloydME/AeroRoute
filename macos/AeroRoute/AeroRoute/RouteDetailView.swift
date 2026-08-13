@@ -411,7 +411,14 @@ private struct AirportSearchResultRow: View {
             Spacer()
             Text(airport.code)
                 .font(.body.monospaced().weight(.semibold))
-                .frame(width: 52, alignment: .trailing)
+                .foregroundStyle(.black)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
+                .background(
+                    Color.yellow,
+                    in: RoundedRectangle(cornerRadius: 7, style: .continuous)
+                )
+                .frame(minWidth: 52, alignment: .trailing)
         }
         .contentShape(Rectangle())
         .padding(.vertical, 3)
