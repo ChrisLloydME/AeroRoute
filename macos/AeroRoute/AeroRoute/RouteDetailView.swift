@@ -317,30 +317,23 @@ private struct AirportSearchPicker: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                AirportSearchField(text: $query) {
-                    lookup(phase: .submitted)
+            Group {
+                switch search.availability {
+                case .loading:
+                    ProgressView("Loading airports…")
+                case let .unavailable(message):
+                    ContentUnavailableView(
+                        "Airport Search Unavailable",
+                        systemImage: "exclamationmark.triangle",
+                        description: Text(message)
+                    )
+                case .ready:
+                    results
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-
-                Divider()
-
-                Group {
-                    switch search.availability {
-                    case .loading:
-                        ProgressView("Loading airports…")
-                    case let .unavailable(message):
-                        ContentUnavailableView(
-                            "Airport Search Unavailable",
-                            systemImage: "exclamationmark.triangle",
-                            description: Text(message)
-                        )
-                    case .ready:
-                        results
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .airportSearchBar(text: $query) {
+                lookup(phase: .submitted)
             }
             .navigationTitle("Search Airports")
             .onChange(of: query) {
@@ -494,6 +487,27 @@ private extension View {
             glassEffect(.regular.interactive(), in: Capsule())
         } else {
             background(.regularMaterial, in: Capsule())
+        }
+    }
+
+    @ViewBuilder
+    func airportSearchBar(
+        text: Binding<String>,
+        onSubmit: @escaping () -> Void
+    ) -> some View {
+        if #available(macOS 26.0, iOS 26.0, *) {
+            safeAreaBar(edge: .top, spacing: 0) {
+                AirportSearchField(text: text, onSubmit: onSubmit)
+                    .padding(.horizontal, 16)
+            }
+            .scrollEdgeEffectStyle(.soft, for: .top)
+        } else {
+            safeAreaInset(edge: .top, spacing: 0) {
+                AirportSearchField(text: text, onSubmit: onSubmit)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(.bar)
+            }
         }
     }
 }
