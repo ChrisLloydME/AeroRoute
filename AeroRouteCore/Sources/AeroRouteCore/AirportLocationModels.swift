@@ -148,31 +148,22 @@ public struct AirportTrackMatchResponse: Sendable, Equatable {
     }
 }
 
-public struct AirportWaypointMatch: Sendable, Equatable, Identifiable {
-    public let pointIndex: Int
-    public let response: AirportProximityResponse
+public struct AirportFileMatchResponse: Sendable, Equatable, Identifiable {
+    /// Stable within one input batch, even if the same URL appears more than once.
+    public let inputIndex: Int
+    public let metadata: FR24Metadata
+    public let match: AirportTrackMatchResponse
 
-    public var id: Int { pointIndex }
+    public var id: Int { inputIndex }
+    public var source: URL { metadata.source }
 
-    public init(pointIndex: Int, response: AirportProximityResponse) {
-        self.pointIndex = pointIndex
-        self.response = response
-    }
-}
-
-public struct AirportItineraryMatchResponse: Sendable, Equatable {
-    public let waypoints: [AirportWaypointMatch]
-
-    public init(waypoints: [AirportWaypointMatch]) {
-        self.waypoints = waypoints
-    }
-
-    /// Non-nil only when every waypoint is safe to fill without user input.
-    public var automaticAirports: [Airport]? {
-        guard !waypoints.isEmpty else { return nil }
-        let airports = waypoints.compactMap {
-            $0.response.automaticSelection?.airport
-        }
-        return airports.count == waypoints.count ? airports : nil
+    public init(
+        inputIndex: Int,
+        metadata: FR24Metadata,
+        match: AirportTrackMatchResponse
+    ) {
+        self.inputIndex = inputIndex
+        self.metadata = metadata
+        self.match = match
     }
 }

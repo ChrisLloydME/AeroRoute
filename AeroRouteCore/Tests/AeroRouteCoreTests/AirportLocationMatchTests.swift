@@ -88,21 +88,21 @@ struct AirportLocationMatchTests {
         #expect(response.automaticDestination?.supportingPointCount ?? 0 >= 1)
     }
 
-    @Test func combinedTrackResolvesEveryAirportInRouteOrder() throws {
-        let filenames = ["lh727.csv", "lh2440.csv", "fi217.csv"]
-        let tracks = try filenames.map {
-            try loadFR24(airportLocationExampleData.appending(path: $0)).track
+    @Test func multipleFilesRemainIndependentAndSourceBound() throws {
+        let filenames = ["lh727.csv", "sq22.csv", "fi217.csv"]
+        let legs = try filenames.map {
+            try loadFR24(airportLocationExampleData.appending(path: $0))
         }
-        let itinerary = try combineTracks(tracks: tracks)
 
-        let response = Self.engine.matchAirportWaypoints(for: itinerary)
+        let responses = Self.engine.matchAirportFiles(legs)
 
-        #expect(response.waypoints.map(\.pointIndex) == itinerary.waypointIndices)
-        #expect(response.waypoints.map {
-            $0.response.candidates.first?.airport.iataCode
-        } == ["PVG", "MUC", "CPH", "KEF"])
-        #expect(response.automaticAirports?.compactMap(\.iataCode)
-            == ["PVG", "MUC", "CPH", "KEF"])
+        #expect(responses.map(\.inputIndex) == [0, 1, 2])
+        #expect(responses.map { $0.source.lastPathComponent } == filenames)
+        #expect(responses.map { $0.metadata.flightNumber } == ["LH727", "SQ22", "FI217"])
+        #expect(responses.map { $0.match.automaticOrigin?.airport.iataCode }
+            == ["PVG", "SIN", "CPH"])
+        #expect(responses.map { $0.match.automaticDestination?.airport.iataCode }
+            == ["MUC", "EWR", "KEF"])
     }
 }
 

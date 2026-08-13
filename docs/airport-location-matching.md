@@ -1,7 +1,7 @@
 # Airport location matching
 
 `AirportSearchEngine` can match the bundled airport catalog from a coordinate,
-an ordered ADS-B track, or every endpoint in a combined multi-leg track. The
+one ordered ADS-B track, or a batch of independently imported CSV files. The
 API is offline, deterministic, and returns candidates even when it declines to
 fill a value automatically.
 
@@ -65,18 +65,22 @@ The matcher samples at most 64 observations from the first and last ten
 minutes. This resists a noisy individual coordinate while keeping cost bounded.
 The values are configurable through `AirportTrackMatchOptions`.
 
-For a multi-leg track created by `combineTracks`:
+For multiple CSV files:
 
 ```swift
-let response = engine.matchAirportWaypoints(for: itinerary)
+let files = engine.matchAirportFiles(importedLegs)
 
-if let airports = response.automaticAirports {
-    // Every waypoint was decisive and airports preserve route order.
-} else {
-    // Inspect each waypoint.response independently; only ambiguous entries
-    // need user intervention.
+for file in files {
+    // file.inputIndex preserves input order.
+    // file.source and file.metadata stay bound to the original CSV.
+    let origin = file.match.automaticOrigin?.airport
+    let destination = file.match.automaticDestination?.airport
 }
 ```
+
+Batch matching never calls `combineTracks`, validates continuity, or shares
+endpoint evidence between files. Each CSV is a separate inference unit, so
+non-contiguous inputs are valid and cannot affect one another's ranking.
 
 The stable location-matching types are:
 
@@ -88,14 +92,14 @@ The stable location-matching types are:
 | `AirportProximityResponse` | Ranked candidates and automatic/manual resolution |
 | `AirportTrackMatchOptions` | Track evidence and proximity policy knobs |
 | `AirportTrackMatchResponse` | Origin and destination responses for one flight |
-| `AirportItineraryMatchResponse` | Ordered responses for all retained waypoints |
+| `AirportFileMatchResponse` | Input index, original CSV metadata, and that file's match |
 
 ## Regression coverage
 
 `AirportLocationMatchTests` verifies invalid and remote coordinates, exact
 coordinate lookup, an intentionally ambiguous midpoint, all seven bundled
-Flightradar24 examples, and a combined four-airport itinerary. The example
-tracks currently resolve as:
+Flightradar24 examples, and a deliberately non-contiguous three-file batch. The
+example tracks currently resolve as:
 
 | File | Expected route |
 | --- | --- |

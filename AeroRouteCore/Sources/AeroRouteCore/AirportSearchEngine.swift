@@ -205,49 +205,19 @@ public final class AirportSearchEngine: @unchecked Sendable {
         )
     }
 
-    /// Resolves every endpoint retained by `combineTracks`, preserving route order.
-    /// A partially ambiguous itinerary remains useful: each waypoint has its own
-    /// candidates and resolution, while `automaticAirports` stays nil.
-    public func matchAirportWaypoints(
-        for track: Track,
+    /// Matches each imported CSV independently and preserves input order. No
+    /// continuity, endpoint evidence, or ranking signal crosses file boundaries.
+    public func matchAirportFiles(
+        _ legs: [ImportedLeg],
         options: AirportTrackMatchOptions = .init()
-    ) -> AirportItineraryMatchResponse {
-        guard !track.points.isEmpty else {
-            return AirportItineraryMatchResponse(waypoints: [])
-        }
-        let fallback = track.points.count == 1 ? [0] : [0, track.points.count - 1]
-        let sourceIndices = track.waypointIndices.isEmpty
-            ? fallback
-            : track.waypointIndices
-        var seen: Set<Int> = []
-        let indices = sourceIndices.filter {
-            track.points.indices.contains($0) && seen.insert($0).inserted
-        }
-        let matches = indices.map { index in
-            let point = track.points[index]
-            let request = AirportProximityRequest(
-                coordinate: AirportCoordinate(
-                    latitude: point.latitude,
-                    longitude: point.longitude
-                ),
-                limit: options.limit,
-                maximumDistanceKM: options.maximumDistanceKM,
-                prefersScheduledService: options.prefersScheduledService
-            )
-            return AirportWaypointMatch(
-                pointIndex: index,
-                response: proximityResponse(
-                    request: request,
-                    evidence: waypointEvidence(
-                        track,
-                        pointIndex: index,
-                        options: options
-                    ),
-                    supportingRadiusKM: options.supportingRadiusKM
-                )
+    ) -> [AirportFileMatchResponse] {
+        legs.enumerated().map { inputIndex, leg in
+            AirportFileMatchResponse(
+                inputIndex: inputIndex,
+                metadata: leg.metadata,
+                match: matchAirports(for: leg.track, options: options)
             )
         }
-        return AirportItineraryMatchResponse(waypoints: matches)
     }
 
     private func proximityResponse(
@@ -374,28 +344,6 @@ public final class AirportSearchEngine: @unchecked Sendable {
         let maximum = max(1, options.maximumEvidencePoints)
         let points = evenlySample(Array(ordered), limit: maximum)
         return points.map {
-            AirportCoordinate(latitude: $0.latitude, longitude: $0.longitude)
-        }
-    }
-
-    private func waypointEvidence(
-        _ track: Track,
-        pointIndex: Int,
-        options: AirportTrackMatchOptions
-    ) -> [AirportCoordinate] {
-        let anchor = track.points[pointIndex]
-        let window = max(0, options.evidenceWindowSeconds)
-        let points: [TrackPoint]
-        if pointIndex == track.points.startIndex {
-            points = Array(track.points[pointIndex...].prefix { point in
-                point.timestamp - anchor.timestamp <= window
-            })
-        } else {
-            points = Array(track.points[...pointIndex].reversed().prefix { point in
-                anchor.timestamp - point.timestamp <= window
-            })
-        }
-        return evenlySample(points, limit: max(1, options.maximumEvidencePoints)).map {
             AirportCoordinate(latitude: $0.latitude, longitude: $0.longitude)
         }
     }
