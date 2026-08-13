@@ -1,5 +1,7 @@
 import Foundation
+import ImageIO
 import Photos
+import UniformTypeIdentifiers
 
 #if os(macOS)
 import AppKit
@@ -27,11 +29,12 @@ enum PhotoExportError: LocalizedError {
     }
 }
 
-nonisolated func rasterizedPNGData(from svg: String) throws -> Data {
+nonisolated func rasterizedPNGFile(from svg: String, filename: String) throws -> URL {
     let svgData = Data(svg.utf8)
+    let cgImage: CGImage
 
 #if os(macOS)
-    return try autoreleasepool {
+    cgImage = try autoreleasepool {
         guard let image = NSImage(data: svgData) else {
             throw PhotoExportError.invalidSVG
         }
@@ -74,10 +77,10 @@ nonisolated func rasterizedPNGData(from svg: String) throws -> Data {
         )
         NSGraphicsContext.restoreGraphicsState()
 
-        guard let data = representation.representation(using: .png, properties: [:]) else {
+        guard let cgImage = representation.cgImage else {
             throw PhotoExportError.pngEncodingFailed
         }
-        return data
+        return cgImage
     }
 #else
     guard let image = UIImage(data: svgData), image.size.width > 0, image.size.height > 0 else {
@@ -86,14 +89,36 @@ nonisolated func rasterizedPNGData(from svg: String) throws -> Data {
     let format = UIGraphicsImageRendererFormat()
     format.scale = 1
     let renderer = UIGraphicsImageRenderer(size: image.size, format: format)
-    return renderer.pngData { _ in
+    let renderedImage = renderer.image { _ in
         image.draw(in: CGRect(origin: .zero, size: image.size))
     }
+    guard let renderedCGImage = renderedImage.cgImage else {
+        throw PhotoExportError.pngEncodingFailed
+    }
+    cgImage = renderedCGImage
 #endif
+
+    let temporaryURL = FileManager.default.temporaryDirectory
+        .appendingPathComponent("\(filename)-\(UUID().uuidString)")
+        .appendingPathExtension("png")
+    guard let destination = CGImageDestinationCreateWithURL(
+        temporaryURL as CFURL,
+        UTType.png.identifier as CFString,
+        1,
+        nil
+    ) else {
+        throw PhotoExportError.pngEncodingFailed
+    }
+    CGImageDestinationAddImage(destination, cgImage, nil)
+    guard CGImageDestinationFinalize(destination) else {
+        try? FileManager.default.removeItem(at: temporaryURL)
+        throw PhotoExportError.pngEncodingFailed
+    }
+    return temporaryURL
 }
 
 enum PhotoLibraryExporter {
-    static func save(pngData: Data, filename: String) async throws {
+    static func save(pngAt fileURL: URL, filename: String) async throws {
         let authorization = await authorizationStatus()
         guard authorization == .authorized || authorization == .limited else {
             throw PhotoExportError.accessDenied
@@ -105,7 +130,8 @@ enum PhotoLibraryExporter {
                 let request = PHAssetCreationRequest.forAsset()
                 let options = PHAssetResourceCreationOptions()
                 options.originalFilename = "\(filename).png"
-                request.addResource(with: .photo, data: pngData, options: options)
+                options.shouldMoveFile = true
+                request.addResource(with: .photo, fileURL: fileURL, options: options)
             } completionHandler: { success, error in
                 if let error {
                     continuation.resume(throwing: error)

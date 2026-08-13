@@ -480,19 +480,26 @@ final class RouteWorkspace: ObservableObject {
                 tracks: tracks,
                 sourceName: sourceName,
                 options: options,
-                style: style
+                style: style,
+                filename: filename
             )
             guard !Task.isCancelled,
                   let self,
                   generation == self.exportGeneration,
-                  revision == self.workspaceRevision else { return }
+                  revision == self.workspaceRevision else {
+                if case let .success(fileURL, _) = outcome {
+                    try? FileManager.default.removeItem(at: fileURL)
+                }
+                return
+            }
 
             switch outcome {
-            case let .success(data, stats):
+            case let .success(fileURL, stats):
+                defer { try? FileManager.default.removeItem(at: fileURL) }
                 do {
                     self.statusMessage = "Saving PNG to Photos…"
                     try await PhotoLibraryExporter.save(
-                        pngData: data,
+                        pngAt: fileURL,
                         filename: filename
                     )
                     guard !Task.isCancelled,
@@ -721,7 +728,7 @@ private enum RenderOutcome: Sendable {
 }
 
 private enum PNGRenderOutcome: Sendable {
-    case success(Data, RenderStats)
+    case success(URL, RenderStats)
     case failure(String)
     case cancelled
 }
@@ -747,7 +754,8 @@ private actor RenderWorker {
         tracks: [Track],
         sourceName: String,
         options: RenderOptions,
-        style: MapStyle
+        style: MapStyle,
+        filename: String
     ) -> PNGRenderOutcome {
         guard !Task.isCancelled else { return .cancelled }
         switch RouteWorkspace.render(
@@ -758,8 +766,12 @@ private actor RenderWorker {
         ) {
         case let .success(svg, stats):
             do {
-                let data = try rasterizedPNGData(from: svg)
-                return Task.isCancelled ? .cancelled : .success(data, stats)
+                let fileURL = try rasterizedPNGFile(from: svg, filename: filename)
+                guard !Task.isCancelled else {
+                    try? FileManager.default.removeItem(at: fileURL)
+                    return .cancelled
+                }
+                return .success(fileURL, stats)
             } catch {
                 return .failure(RouteWorkspace.message(for: error))
             }

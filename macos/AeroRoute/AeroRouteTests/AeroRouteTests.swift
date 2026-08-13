@@ -96,7 +96,9 @@ final class AeroRouteTests: XCTestCase {
         </svg>
         """
 
-        let data = try rasterizedPNGData(from: svg)
+        let fileURL = try rasterizedPNGFile(from: svg, filename: "test-export")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        let data = try Data(contentsOf: fileURL)
 
         XCTAssertEqual(Array(data.prefix(8)), [137, 80, 78, 71, 13, 10, 26, 10])
 #if os(macOS)
