@@ -239,7 +239,7 @@ final class GoldenCompatibilityTests: XCTestCase {
         XCTAssertLessThanOrEqual(rendered.stats.endXY.y, viewport.bottom)
     }
 
-    func testRouteCenteredWorldRenderKeepsFullWorldAndFillsCanvas() throws {
+    func testRouteCenteredWorldRenderKeepsOriginalWorldViewport() throws {
         let track = try Self.loadFixtureTrack(Self.fixtures[6])
         let rendered = try SVGRenderer.buildSVG(
             track: track,
@@ -250,7 +250,7 @@ final class GoldenCompatibilityTests: XCTestCase {
         XCTAssertTrue(rendered.svg.contains("data-map-center-longitude=\""))
         XCTAssertTrue(
             rendered.svg.contains(
-                "<rect x=\"0.000\" y=\"0.000\" width=\"1600.000\" height=\"1000.000\" />"
+                "<rect x=\"0.000\" y=\"190.000\" width=\"1600.000\" height=\"630.000\" />"
             )
         )
     }

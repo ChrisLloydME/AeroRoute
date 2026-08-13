@@ -208,8 +208,7 @@ public enum SVGRenderer {
         )
 
         let definitions = root.add("defs")
-        let usesFullCanvas = options.fitMapToRoute || options.centerRouteOnWorldMap
-        let viewport = usesFullCanvas
+        let viewport = options.fitMapToRoute
             ? MapViewport(left: 0, top: 0, right: widthDouble, bottom: heightDouble)
             : AeroRouteGeometry.mapViewport(width: widthDouble, height: heightDouble)
         let unwrapped = AeroRouteGeometry.unwrapLongitudes(
