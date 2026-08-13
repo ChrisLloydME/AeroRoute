@@ -202,6 +202,7 @@ private struct AirportLabelsEditor: View {
     @State private var originName: String
     @State private var destinationCode: String
     @State private var destinationName: String
+    @State private var searchTarget: AirportEndpoint?
 
     init(workspace: RouteWorkspace, leg: FlightLegSummary) {
         self.workspace = workspace
@@ -217,13 +218,19 @@ private struct AirportLabelsEditor: View {
         NavigationStack {
             Form {
                 Section("Origin") {
-                    TextField("Airport Code", text: $originCode)
-                    TextField("Airport Name", text: $originName)
+                    airportFields(
+                        code: $originCode,
+                        name: $originName,
+                        endpoint: .origin
+                    )
                 }
 
                 Section("Destination") {
-                    TextField("Airport Code", text: $destinationCode)
-                    TextField("Airport Name", text: $destinationName)
+                    airportFields(
+                        code: $destinationCode,
+                        name: $destinationName,
+                        endpoint: .destination
+                    )
                 }
             }
             .formStyle(.grouped)
@@ -247,7 +254,157 @@ private struct AirportLabelsEditor: View {
                     .keyboardShortcut(.defaultAction)
                 }
             }
+            .sheet(item: $searchTarget) { endpoint in
+                AirportSearchPicker(search: workspace.airportSearch) { airport in
+                    apply(airport, to: endpoint)
+                    searchTarget = nil
+                }
+#if os(macOS)
+                .frame(minWidth: 560, minHeight: 460)
+#endif
+            }
         }
+    }
+
+    @ViewBuilder
+    private func airportFields(
+        code: Binding<String>,
+        name: Binding<String>,
+        endpoint: AirportEndpoint
+    ) -> some View {
+        TextField("Airport Code", text: code)
+            .onSubmit {
+                autocompleteName(for: code.wrappedValue, name: name)
+            }
+        TextField("Airport Name", text: name)
+        Button("Search Airports…") {
+            searchTarget = endpoint
+        }
+        .disabled(workspace.airportSearch.availability != .ready)
+    }
+
+    private func autocompleteName(for code: String, name: Binding<String>) {
+        guard let airport = workspace.airportSearch.exactCodeMatch(code) else { return }
+        name.wrappedValue = airport.name
+    }
+
+    private func apply(_ airport: AirportSearchCandidate, to endpoint: AirportEndpoint) {
+        switch endpoint {
+        case .origin:
+            originCode = airport.code
+            originName = airport.name
+        case .destination:
+            destinationCode = airport.code
+            destinationName = airport.name
+        }
+    }
+}
+
+private enum AirportEndpoint: String, Identifiable {
+    case origin
+    case destination
+
+    var id: Self { self }
+}
+
+private struct AirportSearchPicker: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var search: AirportSearchStore
+    let onSelect: (AirportSearchCandidate) -> Void
+
+    @State private var query = ""
+    @State private var response: AirportSearchSnapshot?
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                switch search.availability {
+                case let .unavailable(message):
+                    ContentUnavailableView(
+                        "Airport Search Unavailable",
+                        systemImage: "exclamationmark.triangle",
+                        description: Text(message)
+                    )
+                case .ready:
+                    results
+                }
+            }
+            .navigationTitle("Search Airports")
+            .searchable(text: $query, prompt: "Code, airport, city, or country")
+            .onSubmit(of: .search) {
+                lookup(phase: .submitted)
+            }
+            .onChange(of: query) {
+                lookup(phase: .editing)
+            }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var results: some View {
+        if let response, !response.candidates.isEmpty {
+            List(response.candidates) { airport in
+                Button {
+                    onSelect(airport)
+                } label: {
+                    AirportSearchResultRow(airport: airport)
+                }
+                .buttonStyle(.plain)
+            }
+        } else if response?.presentation == .noMatches {
+            ContentUnavailableView.search(text: query)
+        } else {
+            ContentUnavailableView(
+                "Find an Airport",
+                systemImage: "airplane",
+                description: Text("Search in English by airport code, name, city, or country.")
+            )
+        }
+    }
+
+    private func lookup(phase: AirportSearchQueryPhase) {
+        response = search.lookup(text: query, phase: phase)
+    }
+}
+
+private struct AirportSearchResultRow: View {
+    let airport: AirportSearchCandidate
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(airport.code)
+                .font(.body.monospaced().weight(.semibold))
+                .frame(width: 52, alignment: .leading)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(airport.name)
+                Text(location)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            if let icao = airport.icaoCode,
+               icao != airport.code {
+                Text(icao)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .contentShape(Rectangle())
+        .padding(.vertical, 3)
+    }
+
+    private var location: String {
+        [airport.municipality, airport.countryName]
+            .compactMap { value in
+                guard let value, !value.isEmpty else { return nil }
+                return value
+            }
+            .joined(separator: ", ")
     }
 }
 

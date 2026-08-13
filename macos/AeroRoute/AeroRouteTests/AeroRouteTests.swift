@@ -7,6 +7,37 @@ import XCTest
 @testable import AeroRoute
 
 final class AeroRouteTests: XCTestCase {
+    @MainActor
+    func testAirportSearchStoreUsesSubmittedExactCodeContractForAutocomplete() {
+        let provider = StubAirportSearchProvider { text, phase, limit in
+            XCTAssertEqual(text, "pvg")
+            XCTAssertEqual(phase, .submitted)
+            XCTAssertEqual(limit, 1)
+            return AirportSearchSnapshot(
+                text: text,
+                presentation: .automaticSelection,
+                candidates: [Self.pudongAirport(isExactCodeMatch: true)]
+            )
+        }
+        let store = AirportSearchStore(provider: provider)
+
+        XCTAssertEqual(store.exactCodeMatch("pvg")?.name, "Shanghai Pudong International Airport")
+    }
+
+    @MainActor
+    func testAirportSearchStoreDoesNotAutocompleteNonCodeAutomaticResult() {
+        let provider = StubAirportSearchProvider { text, _, _ in
+            AirportSearchSnapshot(
+                text: text,
+                presentation: .automaticSelection,
+                candidates: [Self.pudongAirport(isExactCodeMatch: false)]
+            )
+        }
+        let store = AirportSearchStore(provider: provider)
+
+        XCTAssertNil(store.exactCodeMatch("Shanghai Pudong"))
+    }
+
     func testSVGCanBeRasterizedAsPNG() throws {
         let svg = """
         <svg xmlns="http://www.w3.org/2000/svg" width="32" height="20" viewBox="0 0 32 20">
@@ -345,5 +376,39 @@ final class AeroRouteTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
+    }
+
+    private static func pudongAirport(isExactCodeMatch: Bool) -> AirportSearchCandidate {
+        AirportSearchCandidate(
+            id: 1,
+            code: "PVG",
+            name: "Shanghai Pudong International Airport",
+            municipality: "Shanghai",
+            countryName: "China",
+            icaoCode: "ZSPD",
+            isExactCodeMatch: isExactCodeMatch
+        )
+    }
+}
+
+private struct StubAirportSearchProvider: AirportSearchProviding {
+    let handler: @MainActor (String, AirportSearchQueryPhase, Int?) -> AirportSearchSnapshot
+
+    init(
+        handler: @escaping @MainActor (
+            String,
+            AirportSearchQueryPhase,
+            Int?
+        ) -> AirportSearchSnapshot
+    ) {
+        self.handler = handler
+    }
+
+    func lookup(
+        text: String,
+        phase: AirportSearchQueryPhase,
+        limit: Int?
+    ) -> AirportSearchSnapshot {
+        handler(text, phase, limit)
     }
 }

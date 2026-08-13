@@ -76,6 +76,8 @@ enum CompactRouteSection: String, CaseIterable, Identifiable {
 
 @MainActor
 final class RouteWorkspace: ObservableObject {
+    let airportSearch: AirportSearchStore
+
     @Published var legs: [FlightLegItem] = []
     @Published var selectedLegID: FlightLegItem.ID?
     @Published var settings = WorkspaceRenderSettings()
@@ -112,6 +114,10 @@ final class RouteWorkspace: ObservableObject {
     private var importGeneration = 0
     private var workspaceRevision = 0
     private var loadedCommandLineArguments = false
+
+    init(airportSearch: AirportSearchStore? = nil) {
+        self.airportSearch = airportSearch ?? AirportSearchStore()
+    }
 
     deinit {
         renderTask?.cancel()
