@@ -30,6 +30,7 @@ enum PhotoExportError: LocalizedError {
 }
 
 nonisolated func rasterizedPNGFile(from svg: String, filename: String) throws -> URL {
+    try Task.checkCancellation()
     let svgData = Data(svg.utf8)
     let cgImage: CGImage
 
@@ -76,6 +77,7 @@ nonisolated func rasterizedPNGFile(from svg: String, filename: String) throws ->
             fraction: 1
         )
         NSGraphicsContext.restoreGraphicsState()
+        try Task.checkCancellation()
 
         guard let cgImage = representation.cgImage else {
             throw PhotoExportError.pngEncodingFailed
@@ -92,6 +94,7 @@ nonisolated func rasterizedPNGFile(from svg: String, filename: String) throws ->
     let renderedImage = renderer.image { _ in
         image.draw(in: CGRect(origin: .zero, size: image.size))
     }
+    try Task.checkCancellation()
     guard let renderedCGImage = renderedImage.cgImage else {
         throw PhotoExportError.pngEncodingFailed
     }
@@ -101,25 +104,33 @@ nonisolated func rasterizedPNGFile(from svg: String, filename: String) throws ->
     let temporaryURL = FileManager.default.temporaryDirectory
         .appendingPathComponent("\(filename)-\(UUID().uuidString)")
         .appendingPathExtension("png")
-    guard let destination = CGImageDestinationCreateWithURL(
-        temporaryURL as CFURL,
-        UTType.png.identifier as CFString,
-        1,
-        nil
-    ) else {
-        throw PhotoExportError.pngEncodingFailed
-    }
-    CGImageDestinationAddImage(destination, cgImage, nil)
-    guard CGImageDestinationFinalize(destination) else {
+    do {
+        try Task.checkCancellation()
+        guard let destination = CGImageDestinationCreateWithURL(
+            temporaryURL as CFURL,
+            UTType.png.identifier as CFString,
+            1,
+            nil
+        ) else {
+            throw PhotoExportError.pngEncodingFailed
+        }
+        CGImageDestinationAddImage(destination, cgImage, nil)
+        guard CGImageDestinationFinalize(destination) else {
+            throw PhotoExportError.pngEncodingFailed
+        }
+        try Task.checkCancellation()
+        return temporaryURL
+    } catch {
         try? FileManager.default.removeItem(at: temporaryURL)
-        throw PhotoExportError.pngEncodingFailed
+        throw error
     }
-    return temporaryURL
 }
 
 enum PhotoLibraryExporter {
     static func save(pngAt fileURL: URL, filename: String) async throws {
+        try Task.checkCancellation()
         let authorization = await authorizationStatus()
+        try Task.checkCancellation()
         guard authorization == .authorized || authorization == .limited else {
             throw PhotoExportError.accessDenied
         }

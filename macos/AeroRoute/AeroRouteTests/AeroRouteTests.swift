@@ -131,6 +131,7 @@ final class AeroRouteTests: XCTestCase {
         XCTAssertTrue(workspace.canExport)
 
         workspace.prepareExport()
+        XCTAssertFalse(workspace.isPhotoExporting)
         try await waitForIdle(workspace)
 
         let exportData = try XCTUnwrap(workspace.exportDocument?.data)
@@ -284,6 +285,20 @@ final class AeroRouteTests: XCTestCase {
         XCTAssertFalse(workspace.isExporting)
         XCTAssertNil(workspace.previewSVG)
         XCTAssertEqual(workspace.statusMessage, "No files imported")
+    }
+
+    @MainActor
+    func testCancelExportDismissesProgressPopupState() {
+        let workspace = RouteWorkspace()
+        workspace.isExporting = true
+        workspace.isPhotoExporting = true
+        workspace.statusMessage = "Rendering PNG…"
+
+        workspace.cancelExport()
+
+        XCTAssertFalse(workspace.isExporting)
+        XCTAssertFalse(workspace.isPhotoExporting)
+        XCTAssertEqual(workspace.statusMessage, "Export cancelled")
     }
 
 #if os(macOS)

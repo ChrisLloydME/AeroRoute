@@ -97,6 +97,7 @@ final class RouteWorkspace: ObservableObject {
     @Published var isExporterPresented = false
     @Published var exportDocument: SVGFileDocument?
     @Published var isExporting = false
+    @Published var isPhotoExporting = false
     @Published var isImporting = false
 
     @Published var isAlertPresented = false
@@ -471,6 +472,7 @@ final class RouteWorkspace: ObservableObject {
         let worker = renderWorker
         exportDocument = nil
         isExporting = true
+        isPhotoExporting = true
         let pixelWidth = Int((Double(settings.designWidth) * settings.outputScale).rounded())
         let pixelHeight = Int((Double(settings.designHeight) * settings.outputScale).rounded())
         statusMessage = "Rendering PNG (\(pixelWidth.formatted()) × \(pixelHeight.formatted()))…"
@@ -507,6 +509,7 @@ final class RouteWorkspace: ObservableObject {
                           revision == self.workspaceRevision else { return }
                     self.exportTask = nil
                     self.isExporting = false
+                    self.isPhotoExporting = false
                     self.statusMessage = "Saved \(filename).png to Photos"
                     self.previewStats = stats
                 } catch {
@@ -514,6 +517,7 @@ final class RouteWorkspace: ObservableObject {
                           generation == self.exportGeneration else { return }
                     self.exportTask = nil
                     self.isExporting = false
+                    self.isPhotoExporting = false
                     self.presentAlert(
                         title: "Cannot save to Photos",
                         message: Self.message(for: error)
@@ -523,13 +527,21 @@ final class RouteWorkspace: ObservableObject {
             case let .failure(message):
                 self.exportTask = nil
                 self.isExporting = false
+                self.isPhotoExporting = false
                 self.presentAlert(title: "Cannot export", message: message)
                 self.statusMessage = message
             case .cancelled:
                 self.exportTask = nil
                 self.isExporting = false
+                self.isPhotoExporting = false
             }
         }
+    }
+
+    func cancelExport() {
+        guard isExporting else { return }
+        invalidateExport()
+        statusMessage = previewStats.map(readyStatus(stats:)) ?? "Export cancelled"
     }
 
     func handleExport(_ result: Result<URL, Error>) {
@@ -654,6 +666,7 @@ final class RouteWorkspace: ObservableObject {
         exportTask = nil
         exportGeneration += 1
         isExporting = false
+        isPhotoExporting = false
         isExporterPresented = false
         exportDocument = nil
     }
@@ -772,6 +785,8 @@ private actor RenderWorker {
                     return .cancelled
                 }
                 return .success(fileURL, stats)
+            } catch is CancellationError {
+                return .cancelled
             } catch {
                 return .failure(RouteWorkspace.message(for: error))
             }
