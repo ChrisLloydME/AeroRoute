@@ -314,10 +314,21 @@ private struct AirportSearchPicker: View {
 
     @State private var query = ""
     @State private var response: AirportSearchSnapshot?
+    @State private var alphabeticalAirports: [AirportSearchCandidate] = []
+    @State private var selectedAirportID: AirportSearchCandidate.ID?
 
     var body: some View {
         NavigationStack {
-            Group {
+            VStack(spacing: 0) {
+                TextField("Search by code, airport, city, or country", text: $query)
+                    .textFieldStyle(.roundedBorder)
+                    .padding(12)
+                    .onSubmit {
+                        lookup(phase: .submitted)
+                    }
+
+                Divider()
+
                 switch search.availability {
                 case let .unavailable(message):
                     ContentUnavailableView(
@@ -330,16 +341,28 @@ private struct AirportSearchPicker: View {
                 }
             }
             .navigationTitle("Search Airports")
-            .searchable(text: $query, prompt: "Code, airport, city, or country")
-            .onSubmit(of: .search) {
-                lookup(phase: .submitted)
-            }
             .onChange(of: query) {
-                lookup(phase: .editing)
+                if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    response = nil
+                    selectedAirportID = nil
+                } else {
+                    lookup(phase: .editing)
+                }
+            }
+            .task {
+                alphabeticalAirports = search.airportsAlphabetically()
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Apply") {
+                        guard let selectedAirport else { return }
+                        onSelect(selectedAirport)
+                    }
+                    .disabled(selectedAirport == nil)
+                    .keyboardShortcut(.defaultAction)
                 }
             }
         }
@@ -347,24 +370,31 @@ private struct AirportSearchPicker: View {
 
     @ViewBuilder
     private var results: some View {
-        if let response, !response.candidates.isEmpty {
-            List(response.candidates) { airport in
-                Button {
-                    onSelect(airport)
-                } label: {
-                    AirportSearchResultRow(airport: airport)
-                }
-                .buttonStyle(.plain)
+        if !displayedAirports.isEmpty {
+            List(displayedAirports, selection: $selectedAirportID) { airport in
+                AirportSearchResultRow(airport: airport)
+                    .tag(airport.id)
             }
         } else if response?.presentation == .noMatches {
             ContentUnavailableView.search(text: query)
         } else {
             ContentUnavailableView(
-                "Find an Airport",
+                "No Airports Available",
                 systemImage: "airplane",
-                description: Text("Search in English by airport code, name, city, or country.")
+                description: Text("Airport data will appear here when it is available.")
             )
         }
+    }
+
+    private var displayedAirports: [AirportSearchCandidate] {
+        query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? alphabeticalAirports
+            : response?.candidates ?? []
+    }
+
+    private var selectedAirport: AirportSearchCandidate? {
+        guard let selectedAirportID else { return nil }
+        return displayedAirports.first { $0.id == selectedAirportID }
     }
 
     private func lookup(phase: AirportSearchQueryPhase) {
@@ -377,9 +407,9 @@ private struct AirportSearchResultRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Text(airport.code)
-                .font(.body.monospaced().weight(.semibold))
-                .frame(width: 52, alignment: .leading)
+            Text(countryFlag)
+                .font(.title3)
+                .frame(width: 28)
             VStack(alignment: .leading, spacing: 2) {
                 Text(airport.name)
                 Text(location)
@@ -387,12 +417,9 @@ private struct AirportSearchResultRow: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            if let icao = airport.icaoCode,
-               icao != airport.code {
-                Text(icao)
-                    .font(.caption.monospaced())
-                    .foregroundStyle(.secondary)
-            }
+            Text(airport.code)
+                .font(.body.monospaced().weight(.semibold))
+                .frame(width: 52, alignment: .trailing)
         }
         .contentShape(Rectangle())
         .padding(.vertical, 3)
@@ -405,6 +432,17 @@ private struct AirportSearchResultRow: View {
                 return value
             }
             .joined(separator: ", ")
+    }
+
+    private var countryFlag: String {
+        let scalars = airport.countryCode.uppercased().unicodeScalars
+        guard scalars.count == 2,
+              scalars.allSatisfy({ $0.value >= 65 && $0.value <= 90 }) else {
+            return "🌐"
+        }
+        return String(String.UnicodeScalarView(
+            scalars.compactMap { UnicodeScalar(127_397 + $0.value) }
+        ))
     }
 }
 

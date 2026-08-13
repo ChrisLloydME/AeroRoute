@@ -38,6 +38,31 @@ final class AeroRouteTests: XCTestCase {
         XCTAssertNil(store.exactCodeMatch("Shanghai Pudong"))
     }
 
+    @MainActor
+    func testAirportSearchStoreAlphabetizesEmptyQueryAirportList() {
+        let zurich = AirportSearchCandidate(
+            id: 2,
+            code: "ZRH",
+            name: "Zurich Airport",
+            municipality: "Zurich",
+            countryCode: "CH",
+            countryName: "Switzerland",
+            icaoCode: "LSZH",
+            isExactCodeMatch: false
+        )
+        let provider = StubAirportSearchProvider(
+            airports: [zurich, Self.pudongAirport(isExactCodeMatch: false)]
+        ) { text, _, _ in
+            AirportSearchSnapshot(text: text, presentation: .noMatches, candidates: [])
+        }
+        let store = AirportSearchStore(provider: provider)
+
+        XCTAssertEqual(
+            store.airportsAlphabetically().map(\.code),
+            ["PVG", "ZRH"]
+        )
+    }
+
     func testSVGCanBeRasterizedAsPNG() throws {
         let svg = """
         <svg xmlns="http://www.w3.org/2000/svg" width="32" height="20" viewBox="0 0 32 20">
@@ -384,6 +409,7 @@ final class AeroRouteTests: XCTestCase {
             code: "PVG",
             name: "Shanghai Pudong International Airport",
             municipality: "Shanghai",
+            countryCode: "CN",
             countryName: "China",
             icaoCode: "ZSPD",
             isExactCodeMatch: isExactCodeMatch
@@ -392,16 +418,23 @@ final class AeroRouteTests: XCTestCase {
 }
 
 private struct StubAirportSearchProvider: AirportSearchProviding {
+    let airports: [AirportSearchCandidate]
     let handler: @MainActor (String, AirportSearchQueryPhase, Int?) -> AirportSearchSnapshot
 
     init(
+        airports: [AirportSearchCandidate] = [],
         handler: @escaping @MainActor (
             String,
             AirportSearchQueryPhase,
             Int?
         ) -> AirportSearchSnapshot
     ) {
+        self.airports = airports
         self.handler = handler
+    }
+
+    func airportsAlphabetically() -> [AirportSearchCandidate] {
+        airports
     }
 
     func lookup(

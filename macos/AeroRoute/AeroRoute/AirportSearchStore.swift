@@ -6,6 +6,7 @@ struct AirportSearchCandidate: Equatable, Identifiable, Sendable {
     let code: String
     let name: String
     let municipality: String?
+    let countryCode: String
     let countryName: String
     let icaoCode: String?
     let isExactCodeMatch: Bool
@@ -37,6 +38,10 @@ struct AirportSearchSnapshot: Equatable, Sendable {
 /// UI-owned boundary for the independently developed airport search engine.
 /// The core integration only needs to translate its stable response into this model.
 protocol AirportSearchProviding: Sendable {
+    /// Returns all selectable airports ordered by localized-independent airport name.
+    /// This powers the picker before the user enters a query.
+    func airportsAlphabetically() -> [AirportSearchCandidate]
+
     func lookup(
         text: String,
         phase: AirportSearchQueryPhase,
@@ -77,5 +82,19 @@ final class AirportSearchStore: ObservableObject {
         guard let airport = response?.automaticSelection,
               airport.isExactCodeMatch else { return nil }
         return airport
+    }
+
+    func airportsAlphabetically() -> [AirportSearchCandidate] {
+        (provider?.airportsAlphabetically() ?? []).sorted { lhs, rhs in
+            let order = lhs.name.compare(
+                rhs.name,
+                options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
+                range: nil,
+                locale: Locale(identifier: "en_US_POSIX")
+            )
+            if order != .orderedSame { return order == .orderedAscending }
+            if lhs.code != rhs.code { return lhs.code < rhs.code }
+            return lhs.id < rhs.id
+        }
     }
 }
