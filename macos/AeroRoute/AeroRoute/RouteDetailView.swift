@@ -508,8 +508,8 @@ private extension View {
         if #available(macOS 26.0, iOS 26.0, *) {
             safeAreaBar(edge: .top, spacing: 0) {
                 AirportSearchField(text: text, onSubmit: onSearch)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
             }
             .safeAreaBar(edge: .bottom, spacing: 0) {
                 AirportPickerActionBar(
@@ -517,14 +517,14 @@ private extension View {
                     onCancel: onCancel,
                     onApply: onApply
                 )
-                .padding(.vertical, 8)
+                .padding(.vertical, 16)
             }
             .scrollEdgeEffectStyle(.soft, for: [.top, .bottom])
         } else {
             safeAreaInset(edge: .top, spacing: 0) {
                 AirportSearchField(text: text, onSubmit: onSearch)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
                     .background(.bar)
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -533,7 +533,7 @@ private extension View {
                     onCancel: onCancel,
                     onApply: onApply
                 )
-                .padding(.vertical, 8)
+                .padding(.vertical, 16)
                 .background(.bar)
             }
         }
@@ -551,7 +551,7 @@ private struct AirportPickerActionBar: View {
             cancelButton
             applyButton
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 20)
     }
 
     @ViewBuilder
