@@ -42,6 +42,16 @@ final class AeroRouteUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["LX1279"].exists)
         XCTAssertTrue(app.staticTexts["LX188"].exists)
     }
+
+    @MainActor
+    func testAirportMatchingToolbarIsAvailableForSingleCSV() throws {
+        let app = XCUIApplication()
+        app.launchArguments = [example("sk2596.csv").path]
+        app.launch()
+
+        XCTAssertTrue(app.otherElements["route.preview"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.buttons["route.matchAirports"].isEnabled)
+    }
 #endif
 
     @MainActor

@@ -26,6 +26,22 @@ struct ContentView: View {
                 }
                 .disabled(workspace.legs.isEmpty)
 
+                Button {
+                    workspace.matchAirportsFromCSV()
+                } label: {
+                    Label(
+                        workspace.isMatchingAirports ? "Matching Airports…" : "Match Airports",
+                        systemImage: "mappin.and.ellipse"
+                    )
+                }
+                .disabled(
+                    workspace.legs.isEmpty
+                        || workspace.isImporting
+                        || workspace.isMatchingAirports
+                )
+                .help("Match route airports automatically from the imported CSV tracks")
+                .accessibilityIdentifier("route.matchAirports")
+
                 Menu {
                     Button {
                         workspace.prepareExport()
