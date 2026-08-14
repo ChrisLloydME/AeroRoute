@@ -20,13 +20,6 @@ struct ContentView: View {
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button {
-                    workspace.validateNow()
-                } label: {
-                    Label("Validate", systemImage: "checkmark.circle")
-                }
-                .disabled(workspace.legs.isEmpty)
-
-                Button {
                     workspace.matchAirportsFromCSV()
                 } label: {
                     Label(

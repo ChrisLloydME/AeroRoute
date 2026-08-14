@@ -74,14 +74,6 @@ private struct AeroRouteCommands: Commands {
         }
 
         CommandMenu("Route") {
-            Button("Validate") {
-                workspace?.validateNow()
-            }
-            .keyboardShortcut("r", modifiers: [.command, .shift])
-            .disabled(workspace?.legs.isEmpty != false)
-
-            Divider()
-
             Button("Export to Files (SVG)…") {
                 workspace?.prepareExport()
             }

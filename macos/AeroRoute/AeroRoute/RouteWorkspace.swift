@@ -482,10 +482,6 @@ final class RouteWorkspace: ObservableObject {
         }
     }
 
-    func validateNow() {
-        scheduleRender()
-    }
-
     func prepareExport() {
         guard !legs.isEmpty else { return }
         exportTask?.cancel()

@@ -75,8 +75,8 @@ private struct RouteMapPane: View {
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
-                    Button("Validate Again") {
-                        workspace.validateNow()
+                    Button("Try Again") {
+                        workspace.scheduleRender()
                     }
                 }
                 .padding(20)
