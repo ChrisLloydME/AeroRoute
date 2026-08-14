@@ -3,7 +3,7 @@
 ## Product model
 
 AeroRoute is an offline document-style utility: import ordered flight tracks,
-review continuity, edit presentation settings, preview the exact renderer, and
+review route order, edit presentation settings, preview the exact renderer, and
 export SVG. It is not a live map browser and has no account, network, telemetry,
 or background-service layer.
 

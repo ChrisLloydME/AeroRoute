@@ -5,9 +5,10 @@ one or more Flightradar24 CSV tracks into deterministic, editable SVG world
 maps. All parsing, validation, geometry, and SVG generation live in the shared
 `AeroRouteCore` Swift Package and run fully offline.
 
-Every valid source position is retained. AeroRoute does not sample, smooth, or
-reconstruct a track: `N` input positions produce `N - 1` interpolating cubic
-Bézier segments. Adjacent itinerary legs must connect within 50 km.
+Every valid source position is retained. AeroRoute does not sample or discard
+track data. Each continuous path with `N` input positions produces `N - 1`
+interpolating cubic Bézier segments. Multiple independent legs can share one
+map; adjacent legs within 50 km are drawn as a continuous route.
 
 ## Requirements
 
@@ -25,8 +26,8 @@ macOS, iPhone, and iPad and uses `AeroRouteCore` on every platform.
 
 In the app:
 
-1. Import or drop one or more Flightradar24 CSV files in itinerary order.
-2. Reorder or remove legs and validate their endpoint continuity.
+1. Import or drop one or more Flightradar24 CSV files in display order.
+2. Reorder or remove legs; connectable neighbors form continuous route paths.
 3. Edit labels, map content, dimensions, scale, colors, and route width.
 4. Review the live SVG preview and leg table.
 5. Export the deterministic SVG with the system save panel.

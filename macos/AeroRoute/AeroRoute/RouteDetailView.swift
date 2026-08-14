@@ -585,8 +585,6 @@ private struct CompactFlightLegList: View {
                 }
                 LabeledContent("Callsign", value: row.callsign)
                 LabeledContent("Route", value: "\(row.origin) → \(row.destination)")
-                LabeledContent("Connection", value: row.connection)
-                    .foregroundStyle(row.connects ? Color.secondary : Color.red)
             }
             .padding(.vertical, 4)
             .tag(row.id)

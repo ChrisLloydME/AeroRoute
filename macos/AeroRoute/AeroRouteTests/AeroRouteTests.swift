@@ -292,7 +292,7 @@ final class AeroRouteTests: XCTestCase {
     }
 
     @MainActor
-    func testDisconnectedLegsExposeExactValidationError() async throws {
+    func testDisconnectedLegsRenderAsIndependentPathsAndCanExport() async throws {
         let workspace = RouteWorkspace()
         workspace.importURLs([
             example("lx188.csv"),
@@ -301,12 +301,39 @@ final class AeroRouteTests: XCTestCase {
 
         try await waitForIdle(workspace)
 
-        XCTAssertFalse(workspace.canExport)
-        XCTAssertTrue(
-            workspace.renderError?.hasPrefix(
-                "leg 1 does not connect to leg 2: end-to-start distance is "
-            ) == true
+        XCTAssertNil(workspace.renderError)
+        XCTAssertTrue(workspace.canExport)
+        XCTAssertEqual(
+            workspace.previewStats?.curveSegments,
+            (workspace.previewStats?.sourcePoints ?? 0) - 2
         )
+        XCTAssertTrue(workspace.previewSVG?.contains("data-paths=\"2\"") == true)
+
+        let firstLeg = try XCTUnwrap(workspace.legs.first?.id)
+        let secondLeg = try XCTUnwrap(workspace.legs.last?.id)
+        workspace.updateAirportLabels(
+            for: firstLeg,
+            origin: AirportLabel(code: "ZRH", name: "Zurich"),
+            destination: AirportLabel(code: "PVG", name: "Shanghai Pudong")
+        )
+        workspace.updateAirportLabels(
+            for: secondLeg,
+            origin: AirportLabel(code: "KEF", name: "Keflavik"),
+            destination: AirportLabel(code: "CPH", name: "Copenhagen")
+        )
+        try await waitForIdle(workspace)
+
+        XCTAssertEqual(workspace.settings.airportCodes, "ZRH,PVG,KEF,CPH")
+        XCTAssertEqual(workspace.legSummaries.map(\.origin), ["ZRH", "KEF"])
+        XCTAssertEqual(workspace.legSummaries.map(\.destination), ["PVG", "CPH"])
+
+        workspace.moveSelectedLeg(by: -1)
+        try await waitForIdle(workspace)
+
+        XCTAssertEqual(workspace.legs.map(\.flightNumber), ["SK2596", "LX188"])
+        XCTAssertEqual(workspace.settings.airportCodes, "KEF,CPH,ZRH,PVG")
+        XCTAssertEqual(workspace.legSummaries.map(\.origin), ["KEF", "ZRH"])
+        XCTAssertEqual(workspace.legSummaries.map(\.destination), ["CPH", "PVG"])
     }
 
     @MainActor

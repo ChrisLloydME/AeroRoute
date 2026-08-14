@@ -56,8 +56,6 @@ struct FlightLegSummary: Identifiable {
     let destination: String
     let originName: String
     let destinationName: String
-    let connection: String
-    let connects: Bool
 }
 
 struct AirportLabel: Equatable, Sendable {
@@ -162,21 +160,16 @@ final class RouteWorkspace: ObservableObject {
         return zip(tracks, tracks.dropFirst()).map(endpointDistanceKM)
     }
 
-    var allLegsConnect: Bool {
-        connectionDistances.allSatisfy { $0 <= 50 }
-    }
-
     var legSummaries: [FlightLegSummary] {
         let codes = waypointValues(settings.airportCodes)
         let names = waypointValues(settings.airportNames)
-        let distances = connectionDistances
         return legs.enumerated().map { index, leg in
-            let origin = codes.indices.contains(index) ? codes[index] : ""
-            let destination = codes.indices.contains(index + 1) ? codes[index + 1] : ""
-            let originName = names.indices.contains(index) ? names[index] : ""
-            let destinationName = names.indices.contains(index + 1) ? names[index + 1] : ""
-            let isLast = index == legs.count - 1
-            let distance = distances.indices.contains(index) ? distances[index] : nil
+            let originIndex = waypointIndex(forLegOrigin: index)
+            let destinationIndex = originIndex + 1
+            let origin = codes.indices.contains(originIndex) ? codes[originIndex] : ""
+            let destination = codes.indices.contains(destinationIndex) ? codes[destinationIndex] : ""
+            let originName = names.indices.contains(originIndex) ? names[originIndex] : ""
+            let destinationName = names.indices.contains(destinationIndex) ? names[destinationIndex] : ""
             return FlightLegSummary(
                 id: leg.id,
                 flightNumber: leg.flightNumber,
@@ -185,18 +178,15 @@ final class RouteWorkspace: ObservableObject {
                 origin: nonempty(origin) ?? nonempty(originName) ?? "—",
                 destination: nonempty(destination) ?? nonempty(destinationName) ?? "—",
                 originName: originName,
-                destinationName: destinationName,
-                connection: isLast
-                    ? "End"
-                    : distance.map { String(format: "%.1f km", locale: .posix, $0) } ?? "—",
-                connects: isLast || (distance.map { $0 <= 50 } ?? false)
+                destinationName: destinationName
             )
         }
     }
 
     func airportLabels(for legID: FlightLegItem.ID) -> (origin: AirportLabel, destination: AirportLabel)? {
         guard let index = legs.firstIndex(where: { $0.id == legID }) else { return nil }
-        return (airportLabel(at: index), airportLabel(at: index + 1))
+        let originIndex = waypointIndex(forLegOrigin: index)
+        return (airportLabel(at: originIndex), airportLabel(at: originIndex + 1))
     }
 
     func updateAirportLabels(
@@ -207,13 +197,14 @@ final class RouteWorkspace: ObservableObject {
         guard let index = legs.firstIndex(where: { $0.id == legID }) else { return }
         var codes = waypointValues(settings.airportCodes)
         var names = waypointValues(settings.airportNames)
-        let requiredCount = max(legs.count + 1, index + 2)
+        let originIndex = waypointIndex(forLegOrigin: index)
+        let requiredCount = waypointCount
         codes.append(contentsOf: repeatElement("", count: max(0, requiredCount - codes.count)))
         names.append(contentsOf: repeatElement("", count: max(0, requiredCount - names.count)))
-        codes[index] = origin.code.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        codes[index + 1] = destination.code.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        names[index] = origin.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        names[index + 1] = destination.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        codes[originIndex] = origin.code.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        codes[originIndex + 1] = destination.code.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        names[originIndex] = origin.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        names[originIndex + 1] = destination.name.trimmingCharacters(in: .whitespacesAndNewlines)
         settings.airportCodes = serializedWaypointValues(codes)
         settings.airportNames = serializedWaypointValues(names)
         scheduleRender()
@@ -244,8 +235,15 @@ final class RouteWorkspace: ObservableObject {
             guard self.legs.map(\.id) == legIDs else { return }
             switch outcome {
             case let .success(matches):
-                let airports = matches.map { $0.match.automaticOrigin?.airport }
-                    + [matches.last?.match.automaticDestination?.airport]
+                var airports = matches.isEmpty
+                    ? []
+                    : [matches[0].match.automaticOrigin?.airport]
+                for (index, response) in matches.enumerated() {
+                    if index > 0, !self.legsConnect(at: index - 1) {
+                        airports.append(response.match.automaticOrigin?.airport)
+                    }
+                    airports.append(response.match.automaticDestination?.airport)
+                }
                 self.settings.airportCodes = self.serializedWaypointValues(
                     airports.map { $0?.iataCode ?? "" }
                 )
@@ -353,7 +351,9 @@ final class RouteWorkspace: ObservableObject {
               let index = legs.firstIndex(where: { $0.id == selectedLegID }) else {
             return
         }
+        let labels = endpointLabelsByLegID()
         legs.remove(at: index)
+        restoreEndpointLabels(labels)
         if legs.isEmpty {
             self.selectedLegID = nil
         } else {
@@ -364,7 +364,9 @@ final class RouteWorkspace: ObservableObject {
 
     func removeLegs(at offsets: IndexSet) {
         let selected = selectedLegID
+        let labels = endpointLabelsByLegID()
         legs.remove(atOffsets: offsets)
+        restoreEndpointLabels(labels)
         if let selected, !legs.contains(where: { $0.id == selected }) {
             selectedLegID = legs.first?.id
         }
@@ -398,7 +400,9 @@ final class RouteWorkspace: ObservableObject {
     }
 
     func moveLegs(from source: IndexSet, to destination: Int) {
+        let labels = endpointLabelsByLegID()
         legs.move(fromOffsets: source, toOffset: destination)
+        restoreEndpointLabels(labels)
         scheduleRender()
     }
 
@@ -409,7 +413,9 @@ final class RouteWorkspace: ObservableObject {
         }
         let destination = current + offset
         guard legs.indices.contains(destination) else { return }
+        let labels = endpointLabelsByLegID()
         legs.swapAt(current, destination)
+        restoreEndpointLabels(labels)
         scheduleRender()
     }
 
@@ -694,9 +700,56 @@ final class RouteWorkspace: ObservableObject {
 
     private func readyStatus(stats: RenderStats) -> String {
         let legLabel = legs.count == 1 ? "1 leg" : "\(legs.count) legs"
-        let validation = legs.count > 1 ? "All legs connect · " : ""
-        return validation + "\(legLabel) · \(stats.sourcePoints.formatted()) source points · "
+        return "\(legLabel) · \(stats.sourcePoints.formatted()) source points · "
             + "\(stats.curveSegments.formatted()) cubic segments"
+    }
+
+    private var waypointCount: Int {
+        guard !legs.isEmpty else { return 0 }
+        return legs.count + 1 + connectionDistances.filter { $0 > 50 }.count
+    }
+
+    private func legsConnect(at boundaryIndex: Int) -> Bool {
+        let distances = connectionDistances
+        return distances.indices.contains(boundaryIndex) && distances[boundaryIndex] <= 50
+    }
+
+    private func waypointIndex(forLegOrigin legIndex: Int) -> Int {
+        guard legIndex > 0 else { return 0 }
+        let precedingBreaks = (0..<legIndex).filter { !legsConnect(at: $0) }.count
+        return legIndex + precedingBreaks
+    }
+
+    private func endpointLabelsByLegID() -> [FlightLegItem.ID: (AirportLabel, AirportLabel)] {
+        Dictionary(uniqueKeysWithValues: legs.enumerated().map { index, leg in
+            let originIndex = waypointIndex(forLegOrigin: index)
+            return (
+                leg.id,
+                (airportLabel(at: originIndex), airportLabel(at: originIndex + 1))
+            )
+        })
+    }
+
+    private func restoreEndpointLabels(
+        _ labels: [FlightLegItem.ID: (AirportLabel, AirportLabel)]
+    ) {
+        guard !legs.isEmpty else {
+            settings.airportCodes = ""
+            settings.airportNames = ""
+            return
+        }
+        var codes = Array(repeating: "", count: waypointCount)
+        var names = Array(repeating: "", count: waypointCount)
+        for (index, leg) in legs.enumerated() {
+            guard let (origin, destination) = labels[leg.id] else { continue }
+            let originIndex = waypointIndex(forLegOrigin: index)
+            if codes[originIndex].isEmpty { codes[originIndex] = origin.code }
+            if names[originIndex].isEmpty { names[originIndex] = origin.name }
+            codes[originIndex + 1] = destination.code
+            names[originIndex + 1] = destination.name
+        }
+        settings.airportCodes = serializedWaypointValues(codes)
+        settings.airportNames = serializedWaypointValues(names)
     }
 
     private func waypointValues(_ value: String) -> [String] {
@@ -751,7 +804,7 @@ final class RouteWorkspace: ObservableObject {
                 track = try combineTracks(
                     tracks: tracks,
                     source: URL(fileURLWithPath: sourceName),
-                    validateContinuity: true
+                    validateContinuity: false
                 )
             }
             let rendered = try SVGRenderer.buildSVG(
