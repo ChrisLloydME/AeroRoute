@@ -654,9 +654,20 @@ public enum SVGRenderer {
         if let routeName = nonempty(options.routeName) {
             displayedRouteName = routeName
         } else if !options.waypointNames.isEmpty {
-            displayedRouteName = options.waypointNames
-                .map { $0.uppercased() }
-                .joined(separator: " — ")
+            let waypointIndices = track.waypointIndices.isEmpty
+                ? [0, track.points.count - 1]
+                : track.waypointIndices
+            let pathStarts = Set(track.pathStartIndices.dropFirst())
+            displayedRouteName = options.waypointNames.enumerated().reduce(into: "") {
+                result, entry in
+                let (index, name) = entry
+                if index > 0 {
+                    let beginsNewPath = waypointIndices.indices.contains(index)
+                        && pathStarts.contains(waypointIndices[index])
+                    result += beginsNewPath ? " · " : " — "
+                }
+                result += name.uppercased()
+            }
         } else if
             let origin = nonempty(options.originName),
             let destination = nonempty(options.destinationName)

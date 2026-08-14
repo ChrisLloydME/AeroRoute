@@ -233,11 +233,22 @@ struct RouteContractTests {
         #expect(combined.waypointIndices == [0, 1, 2, 3])
         #expect(combined.waypoints == [first.start, first.end, second.start, second.end])
 
-        let rendered = try SVGRenderer.buildSVG(track: combined)
+        let rendered = try SVGRenderer.buildSVG(
+            track: combined,
+            options: RenderOptions(
+                showFlightNumber: true,
+                waypointNames: ["First Origin", "First Destination", "Second Origin", "Second Destination"]
+            )
+        )
         #expect(rendered.stats.curveSegments == 2)
         #expect(rendered.svg.contains("data-paths=\"2\""))
         #expect(rendered.svg.contains(" C "))
         #expect(rendered.svg.components(separatedBy: " M ").count >= 2)
+        #expect(
+            rendered.svg.contains(
+                "FIRST ORIGIN — FIRST DESTINATION · SECOND ORIGIN — SECOND DESTINATION"
+            )
+        )
     }
 
     @Test func toleranceAndEmptyItineraryErrorsAreExact() throws {

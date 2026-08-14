@@ -326,6 +326,11 @@ final class AeroRouteTests: XCTestCase {
         XCTAssertEqual(workspace.settings.airportCodes, "ZRH,PVG,KEF,CPH")
         XCTAssertEqual(workspace.legSummaries.map(\.origin), ["ZRH", "KEF"])
         XCTAssertEqual(workspace.legSummaries.map(\.destination), ["PVG", "CPH"])
+        XCTAssertTrue(
+            workspace.previewSVG?.contains(
+                "ZURICH — SHANGHAI PUDONG · KEFLAVIK — COPENHAGEN"
+            ) == true
+        )
 
         workspace.moveSelectedLeg(by: -1)
         try await waitForIdle(workspace)
@@ -334,6 +339,11 @@ final class AeroRouteTests: XCTestCase {
         XCTAssertEqual(workspace.settings.airportCodes, "KEF,CPH,ZRH,PVG")
         XCTAssertEqual(workspace.legSummaries.map(\.origin), ["KEF", "ZRH"])
         XCTAssertEqual(workspace.legSummaries.map(\.destination), ["CPH", "PVG"])
+        XCTAssertTrue(
+            workspace.previewSVG?.contains(
+                "KEFLAVIK — COPENHAGEN · ZURICH — SHANGHAI PUDONG"
+            ) == true
+        )
     }
 
     @MainActor
