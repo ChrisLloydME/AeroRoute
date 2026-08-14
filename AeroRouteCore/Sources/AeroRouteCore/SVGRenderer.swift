@@ -191,7 +191,9 @@ public enum SVGRenderer {
         root.add(
             "desc",
             attributes: [("id", "map-description")],
-            text: "ADS-B track rendered from all \(track.points.count) source positions as an interpolating cubic Bezier path."
+            text: track.pathRanges.count == 1
+                ? "ADS-B track rendered from all \(track.points.count) source positions as an interpolating cubic Bezier path."
+                : "ADS-B track rendered from all \(track.points.count) source positions as interpolating cubic Bezier paths."
         )
 
         let background = root.add("g", attributes: [("id", "background")])
@@ -363,16 +365,21 @@ public enum SVGRenderer {
                 normalizeLongitude: false
             )
         }
-        let route = AeroRouteGeometry.interpolatingBezierPath(projectedTrack)
-        definitions.add(
-            "path",
-            attributes: [
-                ("id", "flight-track-geometry"),
-                ("d", route.path),
-                ("data-source-points", String(track.points.count)),
-                ("data-curve-segments", String(route.segments)),
-            ]
-        )
+        let routes = track.pathRanges.map { range in
+            AeroRouteGeometry.interpolatingBezierPath(Array(projectedTrack[range]))
+        }
+        let routePath = routes.map(\.path).joined(separator: " ")
+        let routeSegments = routes.reduce(0) { $0 + $1.segments }
+        var routeAttributes = [
+            ("id", "flight-track-geometry"),
+            ("d", routePath),
+            ("data-source-points", String(track.points.count)),
+            ("data-curve-segments", String(routeSegments)),
+        ]
+        if routes.count > 1 {
+            routeAttributes.append(("data-paths", String(routes.count)))
+        }
+        definitions.add("path", attributes: routeAttributes)
 
         let routeGroup = root.add(
             "g",
@@ -400,7 +407,7 @@ public enum SVGRenderer {
                 continue
             }
             var attributes = [
-                ("d", route.path),
+                ("d", routePath),
                 ("data-copy-shift", String(shift)),
             ]
             if shift != 0 {
@@ -491,7 +498,7 @@ public enum SVGRenderer {
             svg,
             RenderStats(
                 sourcePoints: track.points.count,
-                curveSegments: route.segments,
+                curveSegments: routeSegments,
                 startXY: startXY,
                 endXY: endXY
             )
@@ -647,9 +654,20 @@ public enum SVGRenderer {
         if let routeName = nonempty(options.routeName) {
             displayedRouteName = routeName
         } else if !options.waypointNames.isEmpty {
-            displayedRouteName = options.waypointNames
-                .map { $0.uppercased() }
-                .joined(separator: " — ")
+            let waypointIndices = track.waypointIndices.isEmpty
+                ? [0, track.points.count - 1]
+                : track.waypointIndices
+            let pathStarts = Set(track.pathStartIndices.dropFirst())
+            displayedRouteName = options.waypointNames.enumerated().reduce(into: "") {
+                result, entry in
+                let (index, name) = entry
+                if index > 0 {
+                    let beginsNewPath = waypointIndices.indices.contains(index)
+                        && pathStarts.contains(waypointIndices[index])
+                    result += beginsNewPath ? " · " : " — "
+                }
+                result += name.uppercased()
+            }
         } else if
             let origin = nonempty(options.originName),
             let destination = nonempty(options.destinationName)

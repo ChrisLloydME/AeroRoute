@@ -238,11 +238,24 @@ public func combineTracks(
 
     var points: [TrackPoint] = []
     var waypointIndices = [0]
-    for track in tracks {
+    var pathStartIndices = [0]
+    for (index, track) in tracks.enumerated() {
+        if index > 0 {
+            let connects = endpointDistanceKM(tracks[index - 1], track) <= toleranceKM
+            if !connects {
+                pathStartIndices.append(points.count)
+                waypointIndices.append(points.count)
+            }
+        }
         points.append(contentsOf: track.points)
         waypointIndices.append(points.count - 1)
     }
-    return Track(source: source, points: points, waypointIndices: waypointIndices)
+    return Track(
+        source: source,
+        points: points,
+        waypointIndices: waypointIndices,
+        pathStartIndices: pathStartIndices
+    )
 }
 
 private func parseDouble(_ value: String) -> Double? {

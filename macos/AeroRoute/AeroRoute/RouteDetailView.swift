@@ -75,8 +75,8 @@ private struct RouteMapPane: View {
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
-                    Button("Validate Again") {
-                        workspace.validateNow()
+                    Button("Try Again") {
+                        workspace.scheduleRender()
                     }
                 }
                 .padding(20)
@@ -585,8 +585,6 @@ private struct CompactFlightLegList: View {
                 }
                 LabeledContent("Callsign", value: row.callsign)
                 LabeledContent("Route", value: "\(row.origin) → \(row.destination)")
-                LabeledContent("Connection", value: row.connection)
-                    .foregroundStyle(row.connects ? Color.secondary : Color.red)
             }
             .padding(.vertical, 4)
             .tag(row.id)

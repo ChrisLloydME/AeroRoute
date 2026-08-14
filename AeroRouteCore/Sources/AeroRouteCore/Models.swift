@@ -37,11 +37,19 @@ public struct Track: Sendable, Equatable {
     public let source: URL
     public let points: [TrackPoint]
     public let waypointIndices: [Int]
+    /// Point indices that begin a new, visually disconnected route path.
+    public let pathStartIndices: [Int]
 
-    public init(source: URL, points: [TrackPoint], waypointIndices: [Int] = []) {
+    public init(
+        source: URL,
+        points: [TrackPoint],
+        waypointIndices: [Int] = [],
+        pathStartIndices: [Int] = []
+    ) {
         self.source = source
         self.points = points
         self.waypointIndices = waypointIndices
+        self.pathStartIndices = pathStartIndices
     }
 
     public var callsign: String {
@@ -55,6 +63,14 @@ public struct Track: Sendable, Equatable {
     public var waypoints: [TrackPoint] {
         let indices = waypointIndices.isEmpty ? [0, points.count - 1] : waypointIndices
         return indices.map { points[$0] }
+    }
+
+    public var pathRanges: [Range<Int>] {
+        let starts = pathStartIndices.isEmpty ? [0] : pathStartIndices
+        return starts.enumerated().compactMap { offset, start in
+            let end = offset + 1 < starts.count ? starts[offset + 1] : points.count
+            return start >= 0 && start < end && end <= points.count ? start..<end : nil
+        }
     }
 }
 

@@ -23,7 +23,7 @@ struct RouteSidebar: View {
                         .foregroundStyle(.tertiary)
                     Text("No Files")
                         .font(.headline)
-                    Text("Import or drop CSV files in itinerary order.")
+                    Text("Import or drop CSV files in display order.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)

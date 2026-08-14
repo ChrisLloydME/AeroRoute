@@ -222,6 +222,35 @@ struct RouteContractTests {
         }
     }
 
+    @Test func disconnectedLegsBecomeSeparatePathsAndKeepBothEndpoints() throws {
+        let first = makeTrack(timestamps: [1, 2], longitudes: [0, 0])
+        let second = makeTrack(timestamps: [3, 4], longitudes: [10, 10])
+
+        let combined = try combineTracks(tracks: [first, second])
+
+        #expect(combined.pathStartIndices == [0, 2])
+        #expect(combined.pathRanges == [0..<2, 2..<4])
+        #expect(combined.waypointIndices == [0, 1, 2, 3])
+        #expect(combined.waypoints == [first.start, first.end, second.start, second.end])
+
+        let rendered = try SVGRenderer.buildSVG(
+            track: combined,
+            options: RenderOptions(
+                showFlightNumber: true,
+                waypointNames: ["First Origin", "First Destination", "Second Origin", "Second Destination"]
+            )
+        )
+        #expect(rendered.stats.curveSegments == 2)
+        #expect(rendered.svg.contains("data-paths=\"2\""))
+        #expect(rendered.svg.contains(" C "))
+        #expect(rendered.svg.components(separatedBy: " M ").count >= 2)
+        #expect(
+            rendered.svg.contains(
+                "FIRST ORIGIN — FIRST DESTINATION · SECOND ORIGIN — SECOND DESTINATION"
+            )
+        )
+    }
+
     @Test func toleranceAndEmptyItineraryErrorsAreExact() throws {
         let track = makeTrack(timestamps: [1, 2], longitudes: [0, 0])
         do {
