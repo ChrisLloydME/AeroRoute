@@ -121,14 +121,35 @@ python3 compatibility/python-reference/verify_python_golden.py
 ## Repository layout
 
 ```text
-AeroRouteCore/                   Shared Swift package and contract tests
-macos/AeroRoute/                 Xcode 27 SwiftUI project for Apple platforms
-compatibility/golden/python/    Immutable reviewed SVG fixtures
-compatibility/python-reference/ Archived pre-migration evidence only
-examples/data/                   Fixed Flightradar24 CSV inputs
-examples/output/                 Representative reviewed SVG files
-docs/                            Product and architecture documentation
+AeroRouteCore/
+├── Sources/AeroRouteCore/
+│   ├── Airports/               Airport catalog, location, and search
+│   ├── FlightTracks/           FR24 parsing and track models
+│   ├── Map/                    GeoJSON loading and route geometry
+│   ├── SVG/                    SVG rendering and XML serialization
+│   └── Resources/              Bundled map and airport data
+└── Tests/AeroRouteCoreTests/   Tests grouped by the same responsibilities
+macos/AeroRoute/
+├── AeroRoute.xcodeproj/        Shared Xcode 27 project
+└── AeroRoute/
+    ├── App/                    Application and root view entry points
+    ├── Features/               Route editing and SVG preview UI
+    ├── Services/               Export integrations
+    ├── Support/                Shared UI helpers
+    └── Assets.xcassets/        Application assets
+compatibility/
+├── golden/python/              Immutable reviewed SVG fixtures
+└── python-reference/           Archived pre-migration evidence only
+examples/
+├── data/                       Fixed Flightradar24 CSV inputs
+└── output/                     Representative reviewed SVG files
+docs/                           Product and architecture documentation
+tools/                          Airport database build and validation tools
 ```
+
+Generated builds, derived data, package caches, virtual environments, and
+editor metadata are intentionally ignored and should stay outside the tracked
+repository structure.
 
 The offline map geometry comes from Natural Earth 1:110m public-domain data.
 AeroRoute is released under the [MIT License](LICENSE).
