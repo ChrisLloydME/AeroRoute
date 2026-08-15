@@ -294,5 +294,6 @@ private let exampleData: URL = {
         .deletingLastPathComponent()
         .deletingLastPathComponent()
         .deletingLastPathComponent()
+        .deletingLastPathComponent()
         .appending(path: "examples/data", directoryHint: .isDirectory)
 }()

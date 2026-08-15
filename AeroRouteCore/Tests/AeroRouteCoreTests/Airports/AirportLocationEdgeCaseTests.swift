@@ -125,5 +125,6 @@ private let airportLocationExampleDataForEdgeCases: URL = {
         .deletingLastPathComponent()
         .deletingLastPathComponent()
         .deletingLastPathComponent()
+        .deletingLastPathComponent()
         .appending(path: "examples/data", directoryHint: .isDirectory)
 }()

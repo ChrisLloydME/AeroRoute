@@ -298,6 +298,7 @@ final class GoldenCompatibilityTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
+            .deletingLastPathComponent()
     }
 
     private static var exampleDataDirectory: URL {
