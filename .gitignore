@@ -1,5 +1,10 @@
-# macOS metadata and distributable app bundles
+# OS and editor metadata
 .DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Distributable app bundles
 *.app/
 *.dmg
 *.pkg
@@ -11,6 +16,11 @@
 *.egg-info/
 __pycache__/
 *.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
 
 # Packaging output (including AeroRoute.app and release archives)
 /build/
@@ -23,6 +33,10 @@ __pycache__/
 /AeroRouteCore/.swiftpm/
 /.deriveddata-codex/
 /.deriveddata-codex-macos/
+DerivedData/
 xcuserdata/
 *.xcuserstate
-.tmpBridge
+
+# Local migration and scratch work
+/.tmpBridge/
+/.tmp/
