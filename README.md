@@ -91,32 +91,25 @@ xcodebuild \
   build
 ```
 
-Developer ID signing, provisioning, notarization, TestFlight, and App Store
-publication are intentionally outside this migration. They are not required to
-build, test, or complete the application locally.
+## Regression fixtures and archive
 
-## Compatibility evidence
+`examples/data` contains seven fixed Flightradar24 CSV inputs used by the core,
+application, and UI tests. `examples/output` holds the nine immutable SVG
+baselines checked byte-for-byte by `GoldenCompatibilityTests`. Keep these
+fixtures when running tests; do not update them to make a failing comparison pass.
 
-`compatibility/golden/python` contains nine immutable SVG fixtures captured
-from the reviewed Python renderer, plus the commands, options, input hashes, and
-output hashes that produced them. `AeroRouteCore` regenerates every fixture
-byte-for-byte in `GoldenCompatibilityTests`; the golden files must not be
-updated to make a failing Swift comparison pass.
+The original renderer's capture metadata is preserved in
+`examples/output/manifest.json`. Its commands and paths describe the historical
+capture environment, rather than commands to run in the current checkout.
 
-The pre-migration implementation is retained only in
-`compatibility/python-reference` as historical evidence. It is outside the
-product build. Its optional replay verifier can be run with a local Python:
+The pre-native Python/Qt application, CLI, packaging scripts, and duplicate data
+were removed from `main`. The complete tracked state before cleanup is retained
+on `codex/archive-before-native-cleanup-2026-11-05` (commit `89a70dd`).
 
-```bash
-python3 compatibility/python-reference/verify_python_golden.py
-```
-
-## Examples
-
-- [`examples/data`](examples/data) contains seven fixed CSV input fixtures.
-- [`examples/output`](examples/output) contains the nine reviewed single-leg
-  and itinerary SVG results.
-- [`examples/README.md`](examples/README.md) documents the naming convention.
+`tools/build_airport_database.py` and its tests remain because they generate and
+validate the native app's bundled airport catalog. They use the Python standard
+library and are maintenance tools, not part of the application runtime. See
+[the airport data procedure](docs/airport-data.md).
 
 ## Repository layout
 
@@ -137,12 +130,9 @@ macos/AeroRoute/
     ├── Services/               Export integrations
     ├── Support/                Shared UI helpers
     └── Assets.xcassets/        Application assets
-compatibility/
-├── golden/python/              Immutable reviewed SVG fixtures
-└── python-reference/           Archived pre-migration evidence only
 examples/
 ├── data/                       Fixed Flightradar24 CSV inputs
-└── output/                     Representative reviewed SVG files
+└── output/                     Immutable SVG baselines and capture metadata
 docs/                           Product and architecture documentation
 tools/                          Airport database build and validation tools
 ```

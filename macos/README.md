@@ -18,7 +18,7 @@ xcodebuild \
 
 For the unsigned generic iPhone/iPad device build, use
 `-destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO`. Do not select an
-iOS Simulator destination for migration verification.
+iOS Simulator destination for device build verification.
 
 ## Source layout
 

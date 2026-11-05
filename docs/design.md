@@ -77,6 +77,8 @@ metadata, geometry, continuity, GeoJSON, layer composition, serialization, and
 file writing.
 
 The product consists of the Xcode application and `AeroRouteCore`. It neither
-invokes nor embeds Python, PySide6, Qt, or PyInstaller. The archived Python tree
-under `compatibility/python-reference` exists only to preserve provenance and
-is not referenced by the Xcode project or Swift package.
+invokes nor embeds Python, PySide6, Qt, or PyInstaller. The historical Python
+implementation is retained on the archive branch
+`codex/archive-before-native-cleanup-2026-11-05`. Only its immutable SVG
+baselines and capture metadata remain in `examples/output` for native regression
+tests; they are not bundled in the application.

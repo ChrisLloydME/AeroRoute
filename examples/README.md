@@ -1,18 +1,19 @@
-# Examples
+# Regression fixtures
 
-`data/` contains seven fixed Flightradar24 CSV tracks used by the Swift contract
-tests. Filenames use lowercase flight numbers without provider download IDs:
+`data/` contains seven fixed Flightradar24 CSV tracks used by the Swift core,
+application, and UI tests. Filenames use lowercase flight numbers without
+provider download IDs, such as `data/lx188.csv`.
 
-```text
-data/lx188.csv
-output/flight-lx188.svg
-```
+`output/` contains nine immutable SVG baselines: seven single-flight maps and
+two multi-leg itineraries. `GoldenCompatibilityTests` compares the Swift
+renderer's results byte-for-byte and checks the original SHA-256 hashes. Do not
+update these files merely to make a test pass.
 
-`output/` contains nine representative SVGs: seven single-flight maps and two
-multi-leg itineraries. These files are exact copies of the immutable reviewed
-fixtures in `compatibility/golden/python`; update neither location merely to
-make a compatibility test pass.
+`output/manifest.json` preserves the original Python renderer's capture metadata,
+including source revision, options, commands, and hashes. The paths and commands
+in that manifest refer to the historical capture environment. The old renderer
+and its packaging scripts are available on the archive branch
+`codex/archive-before-native-cleanup-2026-11-05`.
 
-To inspect an example in the native app, open the Xcode project, run the shared
-`AeroRoute` scheme, and import one or more CSV files from `data/` in itinerary
-order.
+To inspect a fixture in the native app, import a CSV from `data/`. The CSVs and
+SVG baselines are test data and are not bundled in AeroRoute.app.

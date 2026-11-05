@@ -307,7 +307,7 @@ final class GoldenCompatibilityTests: XCTestCase {
 
     private static var goldenDirectory: URL {
         repositoryRoot.appendingPathComponent(
-            "compatibility/golden/python",
+            "examples/output",
             isDirectory: true
         )
     }
